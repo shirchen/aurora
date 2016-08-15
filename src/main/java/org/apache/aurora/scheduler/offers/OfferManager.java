@@ -68,6 +68,13 @@ import static org.apache.aurora.scheduler.events.PubsubEvent.HostAttributesChang
 public interface OfferManager extends EventSubscriber {
 
   /**
+   * Reserve the offer on behalf of the scheduler.
+   *
+   * @param offer Newly-available resource offer.
+   */
+  void reserveAndLaunchTask(OfferID offerId, Protos.TaskInfo task);
+
+  /**
    * Notifies the scheduler of a new resource offer.
    *
    * @param offer Newly-available resource offer.
@@ -169,6 +176,12 @@ public interface OfferManager extends EventSubscriber {
       this.executor = requireNonNull(executor);
       this.statsProvider = requireNonNull(statsProvider);
       this.hostOffers = new HostOffers(statsProvider);
+    }
+
+    @Override
+    public void reserveAndLaunchTask(OfferID offerId, Protos.TaskInfo task) {
+      Operation operation;
+      driver.acceptOffers(offerId, operation, getOfferFilter());
     }
 
     @Override
@@ -280,6 +293,7 @@ public interface OfferManager extends EventSubscriber {
               .compound(Ordering.arbitrary());
 
       private final Set<HostOffer> offers = new ConcurrentSkipListSet<>(PREFERENCE_COMPARATOR);
+      private final Set<HostOffer> reservedOffers = new ConcurrentSkipListSet<>(PREFERENCE_COMPARATOR);
       private final Map<OfferID, HostOffer> offersById = Maps.newHashMap();
       private final Map<SlaveID, HostOffer> offersBySlave = Maps.newHashMap();
       private final Map<String, HostOffer> offersByHost = Maps.newHashMap();
@@ -330,6 +344,7 @@ public interface OfferManager extends EventSubscriber {
       }
 
       synchronized Iterable<HostOffer> getWeaklyConsistentOffers(TaskGroupKey groupKey) {
+        // See here if task requested a dynamic reservation?
         return Iterables.unmodifiableIterable(FluentIterable.from(offers).filter(
             e -> !staticallyBannedOffers.containsEntry(e.getOffer().getId(), groupKey)));
       }

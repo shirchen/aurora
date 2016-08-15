@@ -128,6 +128,12 @@ class SchedulerDriverService extends AbstractIdleService implements Driver {
   }
 
   @Override
+  public void acceptOffers(Protos.OfferID offerId, Protos.Offer.Operation operation, Protos.Filters filter) {
+    ensureRunning();
+    Futures.getUnchecked(driverFuture).acceptOffers(ImmutableList.of(offerId), ImmutableList.of(operation), filter);
+  }
+
+  @Override
   public void declineOffer(Protos.OfferID offerId, Protos.Filters filter) {
     ensureRunning();
     Futures.getUnchecked(driverFuture).declineOffer(offerId, filter);
