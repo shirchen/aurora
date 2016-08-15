@@ -51,6 +51,7 @@ public class HostOffer {
 
   public Offer getOffer() {
     return offer;
+//    return offer.getResources();
   }
 
   public IHostAttributes getAttributes() {

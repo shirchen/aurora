@@ -19,8 +19,10 @@ import com.google.common.util.concurrent.Service;
 
 import org.apache.mesos.Protos.Filters;
 import org.apache.mesos.Protos.OfferID;
+import org.apache.mesos.Protos.Offer.Operation;
 import org.apache.mesos.Protos.TaskInfo;
 import org.apache.mesos.Protos.TaskStatus;
+import org.apache.mesos.v1.Protos;
 
 /**
  * Wraps the mesos Scheduler driver to ensure its used in a valid lifecycle; namely:
@@ -40,6 +42,16 @@ public interface Driver extends Service {
    * @param filter offer filter applied to unused resources in this offer.
    */
   void launchTask(OfferID offerId, TaskInfo task, Filters filter);
+
+
+  /**
+   * Reserves resources and launches a task.
+   *
+   * @param offerId ID of the resource offer to accept with the task.
+   * @param task Task to launch.
+   * @param filter offer filter applied to unused resources in this offer.
+   */
+  void acceptOffers(OfferID offerId, Operation operation, Filters filter);
 
   /**
    * Declines a resource offer.

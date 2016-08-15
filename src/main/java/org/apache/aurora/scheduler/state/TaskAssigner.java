@@ -138,6 +138,7 @@ public interface TaskAssigner {
         TaskGroupKey groupKey,
         String taskId,
         Map<String, TaskGroupKey> slaveReservations) {
+      boolean reserveOffer = false;
 
       for (HostOffer offer : offerManager.getOffers(groupKey)) {
         Optional<TaskGroupKey> reservedGroup = Optional.fromNullable(
@@ -158,6 +159,9 @@ public interface TaskAssigner {
               storeProvider,
               offer.getOffer(),
               taskId);
+
+          // TODO: try to reserve the offer if task requires us to do so
+
 
           try {
             offerManager.launchTask(offer.getOffer().getId(), taskInfo);
