@@ -21,6 +21,7 @@ import com.google.common.base.Optional;
 import com.google.gson.Gson;
 
 import org.apache.aurora.gen.ScheduleStatus;
+import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
 import org.apache.aurora.scheduler.base.Tasks;
 import org.apache.aurora.scheduler.filter.SchedulingFilter.Veto;
@@ -41,6 +42,26 @@ public interface PubsubEvent {
    */
   interface EventSubscriber {
   }
+
+
+  class OfferAdded implements PubsubEvent {
+    private final HostOffer offer;
+
+    public OfferAdded(HostOffer offer) {
+      this.offer = requireNonNull(offer);
+    }
+
+    public HostOffer getOffer() {
+      return offer;
+    }
+
+    public String toString() {
+      return MoreObjects.toStringHelper(this)
+          .add("offer", offer.toString())
+          .toString();
+    }
+  }
+
 
   /**
    * Event sent when tasks were deleted.

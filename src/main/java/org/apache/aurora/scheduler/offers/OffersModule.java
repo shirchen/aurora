@@ -67,6 +67,17 @@ public class OffersModule extends AbstractModule {
         expose(OfferManager.class);
       }
     });
+
     PubsubEventModule.bindSubscriber(binder(), OfferManager.class);
+
+    install(new PrivateModule() {
+      @Override
+      protected void configure() {
+        bind(OfferReconciler.class).in(Singleton.class);
+        expose(OfferReconciler.class);
+      }
+    });
+
+    PubsubEventModule.bindSubscriber(binder(), OfferReconciler.class);
   }
 }
