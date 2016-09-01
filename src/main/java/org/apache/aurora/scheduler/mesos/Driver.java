@@ -48,10 +48,10 @@ public interface Driver extends Service {
    * Reserves resources and launches a task.
    *
    * @param offerId ID of the resource offer to accept with the task.
-   * @param task Task to launch.
+   * @param operations Operations to perform on the offer eg reserve and launch.
    * @param filter offer filter applied to unused resources in this offer.
    */
-  void acceptOffers(OfferID offerId, Operation operation, Filters filter);
+  void acceptOffers(OfferID offerId, Collection<Operation> operations, Filters filter);
 
   /**
    * Declines a resource offer.

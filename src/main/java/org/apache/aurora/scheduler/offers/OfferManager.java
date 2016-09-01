@@ -13,9 +13,8 @@
  */
 package org.apache.aurora.scheduler.offers;
 
-import java.util.Comparator;
-import java.util.Map;
-import java.util.Set;
+import java.lang.reflect.Array;
+import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -24,13 +23,7 @@ import javax.inject.Inject;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
-import com.google.common.collect.FluentIterable;
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Ordering;
+import com.google.common.collect.*;
 import com.google.common.eventbus.Subscribe;
 
 import org.apache.aurora.common.inject.TimedInterceptor.Timed;
@@ -41,10 +34,13 @@ import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.async.AsyncModule.AsyncExecutor;
 import org.apache.aurora.scheduler.async.DelayExecutor;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
+import org.apache.aurora.scheduler.events.EventSink;
+import org.apache.aurora.scheduler.events.PubsubEvent;
 import org.apache.aurora.scheduler.events.PubsubEvent.DriverDisconnected;
 import org.apache.aurora.scheduler.events.PubsubEvent.EventSubscriber;
 import org.apache.aurora.scheduler.mesos.Driver;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
+import org.apache.commons.collections.ArrayStack;
 import org.apache.mesos.Protos;
 import org.apache.mesos.Protos.Offer.Operation;
 import org.apache.mesos.Protos.OfferID;
@@ -65,10 +61,15 @@ import static org.apache.aurora.scheduler.events.PubsubEvent.HostAttributesChang
  */
 public interface OfferManager extends EventSubscriber {
 
+  // add offerAdded type, OfferReconciliation imports offerAdded type.
+
+  void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList, TaskGroupKey groupKey);
+
   /**
    * Reserve the offer on behalf of the scheduler.
    *
-   * @param offer Newly-available resource offer.
+   * @param offerId Matched offer ID.
+   * @param task Matched task info.
    */
   void reserveAndLaunchTask(OfferID offerId, Protos.TaskInfo task);
 
@@ -119,6 +120,14 @@ public interface OfferManager extends EventSubscriber {
    */
   Iterable<HostOffer> getOffers();
 
+
+  void addToDynamic(TaskGroupKey groupKey, OfferID offerID);
+
+  void removeFromDynamic(TaskGroupKey groupKey, OfferID offerID);
+
+  Collection<OfferID> getDynamic(TaskGroupKey groupKey);
+  Multimap<TaskGroupKey, OfferID> getDynaMap();
+
   /**
    * Gets all offers that are not statically banned for the given {@code groupKey}.
    *
@@ -159,23 +168,92 @@ public interface OfferManager extends EventSubscriber {
     private final Driver driver;
     private final OfferSettings offerSettings;
     private final DelayExecutor executor;
+    private final EventSink eventSink;
 
     @Inject
     @VisibleForTesting
     public OfferManagerImpl(
         Driver driver,
         OfferSettings offerSettings,
-        @AsyncExecutor DelayExecutor executor) {
+        @AsyncExecutor DelayExecutor executor,
+        EventSink eventSink) {
 
       this.driver = requireNonNull(driver);
       this.offerSettings = requireNonNull(offerSettings);
       this.executor = requireNonNull(executor);
+      this.eventSink = requireNonNull(eventSink);
     }
 
     @Override
+    public void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList, TaskGroupKey groupKey) {
+      LOG.info("Inside unReserveOffer got resources" + reservedResourceList.toString());
+//      List<Protos.Resource> resourceList = new ArrayList<>();
+      for (Protos.Resource resource: reservedResourceList) {
+        LOG.info("Looping over resources to unreserve: " + resource.toString());
+//        Protos.Resource.newBuilder(resource).setReservation()
+      }
+      this.hostOffers.removeFromDynamic(groupKey, offerId);
+      Operation unreserve = Protos.Offer.Operation.newBuilder()
+          .setType(Operation.Type.UNRESERVE)
+          .setUnreserve(
+              Protos.Offer.Operation.Unreserve.newBuilder().addAllResources(reservedResourceList).build()).build();
+      List<Operation> operations = Arrays.asList(unreserve);
+      driver.acceptOffers(offerId, operations, getOfferFilter());
+    }
+
+
+    @Override
     public void reserveAndLaunchTask(OfferID offerId, Protos.TaskInfo task) {
-      Operation operation;
-      driver.acceptOffers(offerId, operation, getOfferFilter());
+
+      List<Protos.Resource> resourcesList = task.getResourcesList();
+      // TODO: need driverSettings to set role here.
+      List<Protos.Resource> reservedResourceList = new ArrayList<>();
+      for (Protos.Resource resource: resourcesList) {
+        LOG.info("Before: requesting resource: " + resource.toString());
+//        TaskGroupKey foo = TaskGroupKey.from(task);
+        // Adding labels to each reservation.
+        List<Protos.Label> labels = new ArrayList<>();
+        labels.add(Protos.Label.newBuilder()
+            .setKey("task_name")
+//            .setValue(task.getTaskId().getValue())
+            .setValue(task.getName())
+              .build());
+//        labels.add(Protos.Label.newBuilder()
+//            .setKey("task_name")
+//            .setValue(task.getTaskId().getValue()).
+//                build());
+
+
+        reservedResourceList.add(
+            Protos.Resource.newBuilder(resource)
+                .setRole("aurora-role")
+                .setReservation(Protos.Resource.ReservationInfo.newBuilder()
+//                    .setPrincipal("aurora")
+                    .setLabels(Protos.Labels.newBuilder()
+                        .addAllLabels(labels).build())
+                )
+            .build()
+        );
+      }
+      LOG.info("all resources" + Arrays.toString(reservedResourceList.toArray()));
+      // All resources need to be tagged fresh with reservation info.
+      Protos.TaskInfo newTask = task.toBuilder().clearResources().addAllResources(reservedResourceList).build();
+
+      Operation reserve = Protos.Offer.Operation.newBuilder()
+          .setType(Operation.Type.RESERVE)
+          .setReserve(
+              Protos.Offer.Operation.Reserve.newBuilder().addAllResources(reservedResourceList)
+          )
+          .build();
+      Operation launch = Protos.Offer.Operation.newBuilder()
+          .setType(Protos.Offer.Operation.Type.LAUNCH)
+          .setLaunch(Protos.Offer.Operation.Launch.newBuilder()
+              .addTaskInfos(newTask))
+          .build();
+
+      List<Operation> operations = Arrays.asList(reserve, launch);
+      LOG.info("Finished building operation");
+      driver.acceptOffers(offerId, operations, getOfferFilter());
     }
 
     @Override
@@ -194,6 +272,8 @@ public interface OfferManager extends EventSubscriber {
         decline(offer.getOffer().getId());
         removeAndDecline(sameSlave.get().getOffer().getId());
       } else {
+        // Add a post to EventBus. eventType: .OfferAdded.
+        this.eventSink.post(new PubsubEvent.OfferAdded(offer));
         hostOffers.add(offer);
         executor.execute(
             () -> removeAndDecline(offer.getOffer().getId()),
@@ -231,6 +311,27 @@ public interface OfferManager extends EventSubscriber {
       return hostOffers.remove(offerId);
     }
 
+
+    @Override
+    public void addToDynamic(TaskGroupKey groupKey, OfferID offerID) {
+      this.hostOffers.addToDynamic(groupKey, offerID);
+    }
+
+    public Multimap<TaskGroupKey, OfferID> getDynaMap() {
+      return this.hostOffers.getDynaMap();
+    }
+
+    @Override
+    public void removeFromDynamic(TaskGroupKey groupKey, OfferID offerID) {
+      this.hostOffers.removeFromDynamic(groupKey, offerID);
+    }
+
+    @Override
+    public Collection<OfferID> getDynamic(TaskGroupKey groupKey) {
+      return this.hostOffers.getDynamic(groupKey);
+    }
+
+
     @Override
     public Iterable<HostOffer> getOffers() {
       return hostOffers.getOffers();
@@ -240,6 +341,7 @@ public interface OfferManager extends EventSubscriber {
     public Iterable<HostOffer> getOffers(TaskGroupKey groupKey) {
       return hostOffers.getWeaklyConsistentOffers(groupKey);
     }
+
 
     @Override
     public Optional<HostOffer> getOffer(SlaveID slaveId) {
@@ -288,6 +390,7 @@ public interface OfferManager extends EventSubscriber {
 
       private final Set<HostOffer> offers = new ConcurrentSkipListSet<>(PREFERENCE_COMPARATOR);
       private final Set<HostOffer> reservedOffers = new ConcurrentSkipListSet<>(PREFERENCE_COMPARATOR);
+      private final Map<TaskGroupKey, List<HostOffer>> taskGroupKeyToOffers = Maps.newHashMap();
       private final Map<OfferID, HostOffer> offersById = Maps.newHashMap();
       private final Map<SlaveID, HostOffer> offersBySlave = Maps.newHashMap();
       private final Map<String, HostOffer> offersByHost = Maps.newHashMap();
@@ -295,6 +398,7 @@ public interface OfferManager extends EventSubscriber {
       // Keep track of offer->groupKey mappings that will never be matched to avoid redundant
       // scheduling attempts. See VetoGroup for more details on static ban.
       private final Multimap<OfferID, TaskGroupKey> staticallyBannedOffers = HashMultimap.create();
+      private final Multimap<TaskGroupKey, OfferID> dynamicallyReserved = HashMultimap.create();
 
       HostOffers() {
         // Potential gotcha - since this is a ConcurrentSkipListSet, size() is more expensive.
@@ -304,6 +408,26 @@ public interface OfferManager extends EventSubscriber {
 
       synchronized Optional<HostOffer> get(SlaveID slaveId) {
         return Optional.fromNullable(offersBySlave.get(slaveId));
+      }
+
+      synchronized void addToDynamic(TaskGroupKey groupKey, OfferID offerID) {
+        LOG.info("Adding " + offerID + "for " + groupKey);
+        dynamicallyReserved.put(groupKey, offerID);
+      }
+
+      synchronized Multimap<TaskGroupKey, OfferID> getDynaMap () {
+        return dynamicallyReserved;
+      }
+
+      synchronized void removeFromDynamic(TaskGroupKey groupKey, OfferID offerID) {
+        LOG.info("Removing " + offerID + "for " + groupKey);
+        LOG.info("State before removal", dynamicallyReserved.toString());
+        dynamicallyReserved.remove(groupKey, offerID);
+        LOG.info("State after removal", dynamicallyReserved.toString());
+      }
+
+      synchronized Collection<OfferID> getDynamic(TaskGroupKey groupKey) {
+        return dynamicallyReserved.get(groupKey);
       }
 
       synchronized void add(HostOffer offer) {
@@ -363,6 +487,9 @@ public interface OfferManager extends EventSubscriber {
       hostOffers.addStaticGroupBan(offerId, groupKey);
     }
 
+
+
+
     @Timed("offer_manager_launch_task")
     @Override
     public void launchTask(OfferID offerId, Protos.TaskInfo task) throws LaunchException {
@@ -374,8 +501,14 @@ public interface OfferManager extends EventSubscriber {
       if (hostOffers.remove(offerId)) {
         try {
 
-          // See if task requires dynamic reservation or it's fine as is.
-          driver.launchTask(offerId, task, getOfferFilter());
+          // See if task requires dynamic reservation or it's fine as is. If it does want a dynamic reservation
+          // then just use driver.current class, reserveAndLaunchTask() method.
+          LOG.info("Using latest code");
+
+          // TODO: how to look for existing reservations that have been freed?
+
+          reserveAndLaunchTask(offerId, task);
+//          driver.launchTask(offerId, task, getOfferFilter());
         } catch (IllegalStateException e) {
           // TODO(William Farner): Catch only the checked exception produced by Driver
           // once it changes from throwing IllegalStateException when the driver is not yet
