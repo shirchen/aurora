@@ -75,7 +75,7 @@ public interface OfferManager extends EventSubscriber {
 
   // add offerAdded type, OfferReconciliation imports offerAdded type.
 
-  void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList, TaskGroupKey groupKey);
+  void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList);
 
   /**
    * Reserve the offer on behalf of the scheduler.
@@ -109,6 +109,8 @@ public interface OfferManager extends EventSubscriber {
    */
   void banOffer(OfferID offerId, TaskGroupKey groupKey);
 
+
+  void launchAndReserveTask(OfferID offerId, Protos.TaskInfo task) throws LaunchException;
   /**
    * Launches the task matched against the offer.
    *
@@ -201,14 +203,14 @@ public interface OfferManager extends EventSubscriber {
     }
 
     @Override
-    public void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList, TaskGroupKey groupKey) {
+    public void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList) {
       LOG.info("Inside unReserveOffer got resources" + reservedResourceList.toString());
 //      List<Protos.Resource> resourceList = new ArrayList<>();
       for (Protos.Resource resource: reservedResourceList) {
         LOG.info("Looping over resources to unreserve: " + resource.toString());
 //        Protos.Resource.newBuilder(resource).setReservation()
       }
-      this.hostOffers.removeFromDynamic(groupKey, offerId);
+//      this.hostOffers.removeFromDynamic(groupKey, offerId);
       Operation unreserve = Protos.Offer.Operation.newBuilder()
           .setType(Operation.Type.UNRESERVE)
           .setUnreserve(
@@ -231,14 +233,16 @@ public interface OfferManager extends EventSubscriber {
         List<Protos.Label> labels = new ArrayList<>();
         labels.add(Protos.Label.newBuilder()
             .setKey("task_name")
-//            .setValue(task.getTaskId().getValue())
             .setValue(task.getName())
-              .build());
+              .build()
+        );
+
+        // can not work with task_ids as they will change but labels will not.
 //        labels.add(Protos.Label.newBuilder()
 //            .setKey("task_name")
 //            .setValue(task.getTaskId().getValue()).
-//                build());
-
+//                build()
+//        );
 
         reservedResourceList.add(
             Protos.Resource.newBuilder(resource)
@@ -504,6 +508,32 @@ public interface OfferManager extends EventSubscriber {
     }
 
 
+    @Timed("offer_manager_launch_task")
+    @Override
+    public void launchAndReserveTask(OfferID offerId, Protos.TaskInfo task) throws LaunchException {
+      // Guard against an offer being removed after we grabbed it from the iterator.
+      // If that happens, the offer will not exist in hostOffers, and we can immediately
+      // send it back to LOST for quick reschedule.
+      // Removing while iterating counts on the use of a weakly-consistent iterator being used,
+      // which is a feature of ConcurrentSkipListSet.
+      if (hostOffers.remove(offerId)) {
+        try {
+
+          // See if task requires dynamic reservation or it's fine as is. If it does want a dynamic reservation
+          // then just use driver.current class, reserveAndLaunchTask() method.
+
+          reserveAndLaunchTask(offerId, task);
+        } catch (IllegalStateException e) {
+          // TODO(William Farner): Catch only the checked exception produced by Driver
+          // once it changes from throwing IllegalStateException when the driver is not yet
+          // registered.
+          throw new LaunchException("Failed to launch task.", e);
+        }
+      } else {
+        offerRaces.incrementAndGet();
+        throw new LaunchException("Offer no longer exists in offer queue, likely data race.");
+      }
+    }
 
 
     @Timed("offer_manager_launch_task")
