@@ -149,7 +149,7 @@ public interface TaskAssigner {
         Optional<TaskGroupKey> reservedGroup = Optional.fromNullable(
             slaveReservations.get(offer.getOffer().getSlaveId().getValue()));
         LOG.info("Looking at offer inside TaskAssigner" + offer.toString());
-
+        boolean found = false;
         if (reservedGroup.isPresent() && !reservedGroup.get().equals(groupKey)) {
           // This slave is reserved for a different task group -> skip.
           continue;
@@ -167,6 +167,7 @@ public interface TaskAssigner {
                 taskName + "while label is " + labelValue);
             if (labelValue.equals(taskName)) {
               // Then we found our reservation!!!!
+              found = true;
               LOG.info("Found matching offer for " + groupKey.toString());
             }
             //TODO: if labelValue matches then we found the winner!
@@ -213,8 +214,18 @@ public interface TaskAssigner {
 //              return true;
 //            }
 
-            offerManager.launchTask(offer.getOffer().getId(), taskInfo);
-            return true;
+            // TODO: assuming here that all tasks will want a dynamic reservation.
+            // TODO: what to do if job asked to change it's resources?
+            if (found) {
+              // Just need to perform launch operation.
+              offerManager.launchTask(offer.getOffer().getId(), taskInfo);
+              return true;
+            } else {
+              // Need to perform reserve + launch operation.
+              offerManager.launchAndReserveTask(offer.getOffer().getId(), taskInfo);
+              return true;
+            }
+
           } catch (OfferManager.LaunchException e) {
             LOG.warn("Failed to launch task.", e);
             launchFailures.incrementAndGet();
