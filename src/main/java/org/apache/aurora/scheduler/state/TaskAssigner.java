@@ -175,7 +175,6 @@ public interface TaskAssigner {
           }
         }
 
-
         TierInfo tierInfo = tierManager.getTier(groupKey.getTask());
         Set<Veto> vetoes = filter.filter(
             new UnusedResource(offer.getResourceBag(tierInfo), offer.getAttributes()),
@@ -187,35 +186,7 @@ public interface TaskAssigner {
               offer.getOffer(),
               taskId);
 
-          // TODO: try to reserve the offer if task requires us to do so
-
-
           try {
-//            Protos.OfferID offerID = offer.getOffer().getId();
-            // TODO: see if we already reserved an offer.
-
-            // Logic: have groupKey -> [offer_id_0, offer_id_1,....]
-            // try to see if groupKey exists in the MultiMap inside offerManager.
-            // if yes, then try to see if this offerId matches. if it has already been used then
-            //    let's reuse it again.
-            // if not, then this is a brand new task (or non-reserved) so just try to launch it.
-
-//            Collection<Protos.OfferID> groupKeysForOffer = offerManager.getDynamic(groupKey);
-//            if (groupKeysForOffer.contains(offerID)) {
-//              // If we found a previous offerId in our hashed list so we should try to reuse this offer
-//              offerManager.launchTask(offer.getOffer().getId(), taskInfo);
-//              return true;
-////            } else if () {
-////              // Case where this job has never been dynamically reserved.
-//
-//            } else {
-//              offerManager.addToDynamic(groupKey, offerID);
-//              offerManager.launchTask(offer.getOffer().getId(), taskInfo);
-//              return true;
-//            }
-
-            // TODO: assuming here that all tasks will want a dynamic reservation.
-            // TODO: what to do if job asked to change it's resources?
             if (found) {
               // Just need to perform launch operation.
               offerManager.launchTask(offer.getOffer().getId(), taskInfo);

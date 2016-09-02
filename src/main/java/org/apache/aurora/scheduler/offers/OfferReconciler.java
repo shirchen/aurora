@@ -50,25 +50,14 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
 
 
   private boolean isTaskActive(IScheduledTask foundTask) {
-
     ScheduleStatus status = foundTask.getStatus();
     ImmutableList<ITaskEvent> events = foundTask.getTaskEvents();
-    ITaskEvent rescheduleEvent = events.get(events.size()-1);
-
+    ITaskEvent rescheduleEvent = events.get(events.size() - 1);
 
     boolean isActive;
-    if (rescheduleEvent.getMessage().equals("Killed for job update.")) {
-      isActive = true;
-    } else {
-      isActive = Tasks.ACTIVE_STATES.contains(status);
-    }
-
+    isActive = rescheduleEvent.getMessage().equals("Killed for job update.") || Tasks.ACTIVE_STATES.contains(status);
 
     LOG.info("status is " + status.toString() + "events are " + events.toString());
-
-
-
-
     return isActive;
   }
 
@@ -98,7 +87,7 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
             storeProvider -> storeProvider.getTaskStore().fetchTasks(Query.jobScoped(jobKey).active()));
 
         LOG.info("Number of found tasks " + Iterables.size(foundTasks));
-        LOG.info("Number of active tasks " + Iterables.filter(foundTasks, new Predicate<IScheduledTask>() {
+        LOG.info("List of active tasks " + Iterables.filter(foundTasks, new Predicate<IScheduledTask>() {
           @Override
           public boolean apply(@Nullable IScheduledTask input) {
             return Tasks.ACTIVE_STATES.contains(input.getStatus());
