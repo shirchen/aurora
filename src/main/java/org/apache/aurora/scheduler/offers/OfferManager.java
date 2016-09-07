@@ -135,13 +135,6 @@ public interface OfferManager extends EventSubscriber {
   Iterable<HostOffer> getOffers();
 
 
-  void addToDynamic(TaskGroupKey groupKey, OfferID offerID);
-
-  void removeFromDynamic(TaskGroupKey groupKey, OfferID offerID);
-
-  Collection<OfferID> getDynamic(TaskGroupKey groupKey);
-  Multimap<TaskGroupKey, OfferID> getDynaMap();
-
   /**
    * Gets all offers that are not statically banned for the given {@code groupKey}.
    *
@@ -333,26 +326,6 @@ public interface OfferManager extends EventSubscriber {
 
 
     @Override
-    public void addToDynamic(TaskGroupKey groupKey, OfferID offerID) {
-      this.hostOffers.addToDynamic(groupKey, offerID);
-    }
-
-    public Multimap<TaskGroupKey, OfferID> getDynaMap() {
-      return this.hostOffers.getDynaMap();
-    }
-
-    @Override
-    public void removeFromDynamic(TaskGroupKey groupKey, OfferID offerID) {
-      this.hostOffers.removeFromDynamic(groupKey, offerID);
-    }
-
-    @Override
-    public Collection<OfferID> getDynamic(TaskGroupKey groupKey) {
-      return this.hostOffers.getDynamic(groupKey);
-    }
-
-
-    @Override
     public Iterable<HostOffer> getOffers() {
       return hostOffers.getOffers();
     }
@@ -428,26 +401,6 @@ public interface OfferManager extends EventSubscriber {
 
       synchronized Optional<HostOffer> get(SlaveID slaveId) {
         return Optional.fromNullable(offersBySlave.get(slaveId));
-      }
-
-      synchronized void addToDynamic(TaskGroupKey groupKey, OfferID offerID) {
-        LOG.info("Adding " + offerID + "for " + groupKey);
-        dynamicallyReserved.put(groupKey, offerID);
-      }
-
-      synchronized Multimap<TaskGroupKey, OfferID> getDynaMap () {
-        return dynamicallyReserved;
-      }
-
-      synchronized void removeFromDynamic(TaskGroupKey groupKey, OfferID offerID) {
-        LOG.info("Removing " + offerID + "for " + groupKey);
-        LOG.info("State before removal", dynamicallyReserved.toString());
-        dynamicallyReserved.remove(groupKey, offerID);
-        LOG.info("State after removal", dynamicallyReserved.toString());
-      }
-
-      synchronized Collection<OfferID> getDynamic(TaskGroupKey groupKey) {
-        return dynamicallyReserved.get(groupKey);
       }
 
       synchronized void add(HostOffer offer) {
