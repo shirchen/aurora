@@ -49,17 +49,17 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
   }
 
 
-  private boolean isTaskActive(IScheduledTask foundTask) {
-    ScheduleStatus status = foundTask.getStatus();
-    ImmutableList<ITaskEvent> events = foundTask.getTaskEvents();
-    ITaskEvent rescheduleEvent = events.get(events.size() - 1);
-
-    boolean isActive;
-    isActive = rescheduleEvent.getMessage().equals("Killed for job update.") || Tasks.ACTIVE_STATES.contains(status);
-
-    LOG.info("status is " + status.toString() + "events are " + events.toString());
-    return isActive;
-  }
+//  private boolean isTaskActive(IScheduledTask foundTask) {
+//    ScheduleStatus status = foundTask.getStatus();
+//    ImmutableList<ITaskEvent> events = foundTask.getTaskEvents();
+//    ITaskEvent rescheduleEvent = events.get(events.size() - 1);
+//
+//    boolean isActive;
+//    isActive = rescheduleEvent.getMessage().equals("Killed for job update.") || Tasks.ACTIVE_STATES.contains(status);
+//
+//    LOG.info("status is " + status.toString() + "events are " + events.toString());
+//    return isActive;
+//  }
 
   @Subscribe
   public void offerAdded(PubsubEvent.OfferAdded offerAdded) {
