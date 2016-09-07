@@ -167,31 +167,10 @@ public interface TaskAssigner {
             LOG.info("Task name extracted from task about to be scheduled is " +
                 taskName + " while label is " + labelValue);
             if (labelValue.equals(taskName)) {
-              // Then we found our reservation!!!!
-              LOG.info("FOUND OUR RESERVATION");
+              LOG.info("Found our reservation");
               found = true;
-//              //TODO: Now we need to check if offer matches our ResourceRequest.
-////              offer.getResourceBag(task.getT)
-////              TierInfo tier = tierManager.getTier(taskConfig);
-//              TierInfo tier = tierManager.getTier(resourceRequest.getTask());
-//              ResourceBag offerResourceBag = offer.getResourceBag(tier);
-//              // Now compare the ResourceBags?
-//              LOG.info("offer's bag" + offerResourceBag.toString());
-//              LOG.info("request's bag" + resourceRequest.getResourceBag().toString());
-//              if (offerResourceBag.equals(resourceRequest.getResourceBag())) {
-//                found = true;
-//                LOG.info("Found matching offer for " + groupKey.toString());
-//              } else {
-//                // We must have changed the resource request so we will need to make a new reservation.
-//                found = false;
-//              }
-
-
-
 
             }
-            //TODO: if labelValue matches then we found the winner!
-
           }
         }
 
