@@ -93,6 +93,9 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
             return Tasks.ACTIVE_STATES.contains(input.getStatus());
           }
         }));
+        // Right now we are unreserving if we find no active tasks matching the label on the offer.
+        // But what if the offer does not match anymore? What if we have more dynamic reservations than we have running
+        // tasks. If we made it here, then it's possible that either a task is getting launched OR we no longer need it.
         if (Iterables.isEmpty(foundTasks)) {
           unreserve = true;
           break;
