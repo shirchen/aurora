@@ -38,6 +38,7 @@ import org.apache.aurora.scheduler.filter.SchedulingFilter.Veto;
 import org.apache.aurora.scheduler.filter.SchedulingFilter.VetoGroup;
 import org.apache.aurora.scheduler.mesos.MesosTaskFactory;
 import org.apache.aurora.scheduler.offers.OfferManager;
+import org.apache.aurora.scheduler.resources.ResourceBag;
 import org.apache.aurora.scheduler.resources.ResourceManager;
 import org.apache.aurora.scheduler.resources.ResourceType;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
@@ -164,11 +165,30 @@ public interface TaskAssigner {
             String labelValue = label.getValue();
             String taskName = JobKeys.canonicalString(resourceRequest.getTask().getJob());
             LOG.info("Task name extracted from task about to be scheduled is " +
-                taskName + "while label is " + labelValue);
+                taskName + " while label is " + labelValue);
             if (labelValue.equals(taskName)) {
               // Then we found our reservation!!!!
+              LOG.info("FOUND OUR RESERVATION");
               found = true;
-              LOG.info("Found matching offer for " + groupKey.toString());
+//              //TODO: Now we need to check if offer matches our ResourceRequest.
+////              offer.getResourceBag(task.getT)
+////              TierInfo tier = tierManager.getTier(taskConfig);
+//              TierInfo tier = tierManager.getTier(resourceRequest.getTask());
+//              ResourceBag offerResourceBag = offer.getResourceBag(tier);
+//              // Now compare the ResourceBags?
+//              LOG.info("offer's bag" + offerResourceBag.toString());
+//              LOG.info("request's bag" + resourceRequest.getResourceBag().toString());
+//              if (offerResourceBag.equals(resourceRequest.getResourceBag())) {
+//                found = true;
+//                LOG.info("Found matching offer for " + groupKey.toString());
+//              } else {
+//                // We must have changed the resource request so we will need to make a new reservation.
+//                found = false;
+//              }
+
+
+
+
             }
             //TODO: if labelValue matches then we found the winner!
 
