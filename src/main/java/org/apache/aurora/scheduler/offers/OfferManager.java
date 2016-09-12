@@ -286,7 +286,17 @@ public interface OfferManager extends EventSubscriber {
         removeAndDecline(sameSlave.get().getOffer().getId());
       } else {
         // Add a post to EventBus. eventType: .OfferAdded.
-        this.eventSink.post(new PubsubEvent.OfferAdded(offer));
+        // TODO: check if offer contains ReservationInfo
+
+        List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
+        for (Protos.Resource resource: resourceList) {
+          Protos.Resource.ReservationInfo resInfo = resource.getReservation();
+          if (resInfo.isInitialized()) { // TODO: consider using resInfo.hasLabels?
+            this.eventSink.post(new PubsubEvent.OfferAdded(offer));
+          }
+        }
+
+
         hostOffers.add(offer);
         executor.execute(
             () -> removeAndDecline(offer.getOffer().getId()),

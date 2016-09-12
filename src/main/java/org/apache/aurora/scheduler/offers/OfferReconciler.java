@@ -49,23 +49,22 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
   }
 
 
-//  private boolean isTaskActive(IScheduledTask foundTask) {
-//    ScheduleStatus status = foundTask.getStatus();
-//    ImmutableList<ITaskEvent> events = foundTask.getTaskEvents();
-//    ITaskEvent rescheduleEvent = events.get(events.size() - 1);
-//
-//    boolean isActive;
-//    isActive = rescheduleEvent.getMessage().equals("Killed for job update.") || Tasks.ACTIVE_STATES.contains(status);
-//
-//    LOG.info("status is " + status.toString() + "events are " + events.toString());
-//    return isActive;
-//  }
+  private boolean isTaskActive(IScheduledTask foundTask) {
+    ScheduleStatus status = foundTask.getStatus();
+    ImmutableList<ITaskEvent> events = foundTask.getTaskEvents();
+    ITaskEvent rescheduleEvent = events.get(events.size() - 1);
+
+    boolean isActive;
+    isActive = rescheduleEvent.getMessage().equals("Killed for job update.") || Tasks.ACTIVE_STATES.contains(status);
+
+    LOG.info("status is " + status.toString() + "events are " + events.toString());
+    return isActive;
+  }
 
   @Subscribe
   public void offerAdded(PubsubEvent.OfferAdded offerAdded) {
     HostOffer offer = offerAdded.getOffer();
     LOG.info("Looking at offer " + offer.toString());
-    LOG.info("Found" + offerManager.getDynaMap().toString());
     List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
     //TODO: we should only unreserve resource that we reserved, not the entire offer.
     boolean unreserve = false;
