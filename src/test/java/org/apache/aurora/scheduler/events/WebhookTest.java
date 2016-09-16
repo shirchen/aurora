@@ -87,11 +87,6 @@ public class WebhookTest extends EasyMockTest {
   }
 
   @Test
-  public void testCreatePostRequest() {
-    control.replay();
-  }
-
-  @Test
   public void testWebhookInfo() {
     WebhookInfo webhookInfo = WebhookModule.parseWebhookConfig(WebhookModule.readWebhookFile());
     assertEquals(webhookInfo.toString(),
