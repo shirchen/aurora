@@ -30,6 +30,8 @@ import org.apache.aurora.common.args.Arg;
 import org.apache.aurora.common.args.CmdLine;
 import org.apache.aurora.common.args.constraints.CanRead;
 import org.apache.aurora.common.args.constraints.Exists;
+import org.apache.http.client.HttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.codehaus.jackson.map.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +67,7 @@ public class WebhookModule extends AbstractModule {
   @Override
   protected void configure() {
     if (enableWebhook) {
+      bind(HttpClient.class).toInstance(HttpClients.createDefault());
       bind(WebhookInfo.class).toInstance(parseWebhookConfig(readWebhookFile()));
       PubsubEventModule.bindSubscriber(binder(), Webhook.class);
       bind(Webhook.class).in(Singleton.class);
