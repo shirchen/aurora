@@ -13,6 +13,8 @@
  */
 package org.apache.aurora.scheduler.events;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Map;
 
 import com.google.common.base.MoreObjects;
@@ -21,6 +23,8 @@ import com.google.common.collect.ImmutableMap;
 
 import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonProperty;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static java.util.Objects.requireNonNull;
 
@@ -28,6 +32,8 @@ import static java.util.Objects.requireNonNull;
  * Defines configuration for Webhook.
  */
 public class WebhookInfo {
+  private static final Logger LOG = LoggerFactory.getLogger(WebhookInfo.class);
+
   private final Integer connectTimeout;
   private final Map<String, String> headers;
   private final String targetURL;
@@ -42,12 +48,18 @@ public class WebhookInfo {
   }
 
   /**
-   * Returns URL to post events to.
+   * Returns URI where to post events.
    *
-   * @return String
+   * @return URI
    */
-  public String getTargetURL() {
-    return this.targetURL;
+  URI getTargetURI() {
+    URI targetURI = null;
+    try {
+      targetURI = new URI(targetURL);
+    } catch (URISyntaxException exp) {
+      LOG.error("Error setting URI for Webhook URL", exp);
+    }
+    return targetURI;
   }
 
   /**
@@ -55,7 +67,7 @@ public class WebhookInfo {
    *
    * @return Integer value.
    */
-  public Integer getConnectonTimeout() {
+  Integer getConnectonTimeout() {
     return this.connectTimeout;
   }
 
@@ -65,7 +77,6 @@ public class WebhookInfo {
        @JsonProperty("targetURL") String targetURL,
        @JsonProperty("timeoutMsec") Integer timeout) {
 
-    requireNonNull(targetURL);
     this.headers = ImmutableMap.copyOf(headers);
     this.targetURL = requireNonNull(targetURL);
     this.connectTimeout = requireNonNull(timeout);

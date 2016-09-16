@@ -370,8 +370,8 @@ dependencies {
   compile "org.apache.curator:curator-framework:${curatorRev}"
   compile "org.apache.curator:curator-recipes:${curatorRev}"
   compile 'org.apache.mesos:mesos:1.0.0'
-  compile group: 'org.apache.httpcomponents', name: 'httpclient', version: '4.5.2'
-  compile 'org.apache.httpcomponents:httpcore:${httpcoreRev}'
+  compile "org.apache.httpcomponents:httpclient:${httpclientRev}"
+  compile "org.apache.httpcomponents:httpcore:${httpcoreRev}"
   compile "org.apache.shiro:shiro-guice:${shiroRev}"
   compile "org.apache.shiro:shiro-web:${shiroRev}"
   compile "org.apache.zookeeper:zookeeper:${zookeeperRev}"

@@ -15,8 +15,6 @@ package org.apache.aurora.scheduler.events;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.time.Instant;
 
 import com.google.common.eventbus.Subscribe;
@@ -39,7 +37,7 @@ public class Webhook implements EventSubscriber {
   private static final Logger LOG = LoggerFactory.getLogger(Webhook.class);
 
   private final WebhookInfo webhookInfo;
-  private HttpClient httpClient;
+  private final HttpClient httpClient;
 
   @Inject
   Webhook(HttpClient httpClient, WebhookInfo webhookInfo) {
@@ -49,18 +47,16 @@ public class Webhook implements EventSubscriber {
   }
 
   private HttpPost createPostRequest(TaskStateChange stateChange)
-      throws URISyntaxException, UnsupportedEncodingException {
+      throws UnsupportedEncodingException {
     String eventJson = stateChange.toJson();
     HttpPost post = new HttpPost();
-    post.setURI(new URI(webhookInfo.getTargetURL()));
+    post.setURI(webhookInfo.getTargetURI());
     post.setHeader("Timestamp", Long.toString(Instant.now().toEpochMilli()));
     post.setEntity(new StringEntity(eventJson));
-    post.addHeader("content-type", "application/json");
     webhookInfo.getHeaders().entrySet().forEach(
         e -> post.setHeader(e.getKey(), e.getValue()));
     return post;
   }
-
 
   /**
    * Watches all TaskStateChanges and send them best effort to a configured endpoint.
@@ -72,18 +68,17 @@ public class Webhook implements EventSubscriber {
   @Subscribe
   public void taskChangedState(TaskStateChange stateChange) {
     LOG.debug("Got an event: " + stateChange.toString());
-    try {
-      HttpPost post = createPostRequest(stateChange);
+    if (stateChange.getOldState().isPresent()) {
       try {
-        httpClient.execute(post);
-      } catch (IOException exp) {
-        LOG.error("Error sending a Webhook event", exp);
-      } finally  {
-        // We want to try and reuse the connection.
-        post.reset();
+        HttpPost post = createPostRequest(stateChange);
+        try {
+          httpClient.execute(post);
+        }  catch (IOException exp) {
+          LOG.error("Error sending a Webhook event", exp);
+        }
+      } catch (UnsupportedEncodingException exp) {
+        LOG.error("HttpPost exception when creating an HTTP Post request", exp);
       }
-    } catch (URISyntaxException|UnsupportedEncodingException exp) {
-      LOG.error("HttpPost exception when creating an HTTP Post request", exp);
     }
   }
 }
