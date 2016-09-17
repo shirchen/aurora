@@ -13,6 +13,11 @@
  */
 package org.apache.aurora.scheduler.events;
 
+import java.io.IOException;
+import java.net.URI;
+import java.util.Map;
+
+import com.google.common.collect.ImmutableMap;
 
 import org.apache.aurora.common.testing.easymock.EasyMockTest;
 
@@ -28,8 +33,6 @@ import org.easymock.Capture;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.net.URI;
-
 import static org.easymock.EasyMock.capture;
 import static org.easymock.EasyMock.expect;
 import static org.junit.Assert.assertEquals;
@@ -44,15 +47,12 @@ public class WebhookTest extends EasyMockTest {
       .transition(TASK, ScheduleStatus.FAILED);
   private final String changeJson = changeWithOldState.toJson();
 
-
-  private WebhookInfo webhookInfo;
   private HttpClient httpClient;
   private Webhook webhook;
 
-
   @Before
   public void setUp() {
-    webhookInfo = WebhookModule.parseWebhookConfig(WebhookModule.readWebhookFile());
+    WebhookInfo webhookInfo = WebhookModule.parseWebhookConfig(WebhookModule.readWebhookFile());
     httpClient = createMock(HttpClient.class);
     webhook = new Webhook(httpClient, webhookInfo);
   }
@@ -78,25 +78,49 @@ public class WebhookTest extends EasyMockTest {
     assertEquals(httpPostCapture.getValue().getURI(), new URI("http://localhost:5000/"));
     assertEquals(EntityUtils.toString(httpPostCapture.getValue().getEntity()), changeJson);
     Header[] producerTypeHeader = httpPostCapture.getValue().getHeaders("Producer-Type");
+    assertEquals(producerTypeHeader.length, 1);
     assertEquals(producerTypeHeader[0].getName(), "Producer-Type");
     assertEquals(producerTypeHeader[0].getValue(), "reliable");
     Header[] contentTypeHeader = httpPostCapture.getValue().getHeaders("Content-Type");
+    assertEquals(contentTypeHeader.length, 1);
     assertEquals(contentTypeHeader[0].getName(), "Content-Type");
     assertEquals(contentTypeHeader[0].getValue(), "application/vnd.kafka.json.v1+json");
     assertNotNull(httpPostCapture.getValue().getHeaders("Timestamp"));
   }
 
   @Test
-  public void testWebhookInfo() {
-    WebhookInfo webhookInfo = WebhookModule.parseWebhookConfig(WebhookModule.readWebhookFile());
-    assertEquals(webhookInfo.toString(),
+  public void testCatchHttpClientException() throws Exception {
+    // IOException should be silenced.
+    Capture<HttpPost> httpPostCapture = createCapture();
+    expect(httpClient.execute(capture(httpPostCapture)))
+        .andThrow(new IOException());
+    control.replay();
+
+    webhook.taskChangedState(changeWithOldState);
+  }
+
+  @Test
+  public void testWebhookInfo() throws Exception {
+    WebhookInfo parsedWebhookInfo = WebhookModule.parseWebhookConfig(
+        WebhookModule.readWebhookFile());
+    assertEquals(parsedWebhookInfo.toString(),
         "WebhookInfo{headers={"
             + "Content-Type=application/vnd.kafka.json.v1+json, "
             + "Producer-Type=reliable"
             + "}, "
-            + "targetURL=http://localhost:5000/, "
-            + "connectTimeout=5"
+            + "targetURI=http://localhost:5000/, "
+            + "connectTimeoutMsec=50"
             + "}");
+    // Verifying all attributes were parsed correctly.
+    Map<String, String> headers = ImmutableMap.of(
+        "Content-Type", "application/vnd.kafka.json.v1+json",
+        "Producer-Type", "reliable");
+    assertEquals(parsedWebhookInfo.getHeaders(), headers);
+    URI targetURI = new URI("http://localhost:5000/");
+    assertEquals(parsedWebhookInfo.getTargetURI(), targetURI);
+    Integer timeoutMsec = 50;
+    assertEquals(parsedWebhookInfo.getConnectonTimeoutMsec(), timeoutMsec);
+
     control.replay();
   }
 }

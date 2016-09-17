@@ -23,8 +23,6 @@ import com.google.common.collect.ImmutableMap;
 
 import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonProperty;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static java.util.Objects.requireNonNull;
 
@@ -32,11 +30,9 @@ import static java.util.Objects.requireNonNull;
  * Defines configuration for Webhook.
  */
 public class WebhookInfo {
-  private static final Logger LOG = LoggerFactory.getLogger(WebhookInfo.class);
-
-  private final Integer connectTimeout;
+  private final Integer connectTimeoutMsec;
   private final Map<String, String> headers;
-  private final String targetURL;
+  private final URI targetURI;
 
   /**
    * Return key:value pairs of headers to set for every connection.
@@ -53,12 +49,6 @@ public class WebhookInfo {
    * @return URI
    */
   URI getTargetURI() {
-    URI targetURI = null;
-    try {
-      targetURI = new URI(targetURL);
-    } catch (URISyntaxException exp) {
-      LOG.error("Error setting URI for Webhook URL", exp);
-    }
     return targetURI;
   }
 
@@ -67,27 +57,27 @@ public class WebhookInfo {
    *
    * @return Integer value.
    */
-  Integer getConnectonTimeout() {
-    return this.connectTimeout;
+  Integer getConnectonTimeoutMsec() {
+    return connectTimeoutMsec;
   }
 
   @JsonCreator
   public WebhookInfo(
        @JsonProperty("headers") Map<String, String> headers,
        @JsonProperty("targetURL") String targetURL,
-       @JsonProperty("timeoutMsec") Integer timeout) {
+       @JsonProperty("timeoutMsec") Integer timeout) throws URISyntaxException {
 
     this.headers = ImmutableMap.copyOf(headers);
-    this.targetURL = requireNonNull(targetURL);
-    this.connectTimeout = requireNonNull(timeout);
+    this.targetURI = new URI(requireNonNull(targetURL));
+    this.connectTimeoutMsec = requireNonNull(timeout);
   }
 
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
       .add("headers", headers.toString())
-      .add("targetURL", targetURL)
-      .add("connectTimeout", connectTimeout)
+      .add("targetURI", targetURI.toString())
+      .add("connectTimeoutMsec", connectTimeoutMsec)
       .toString();
   }
 }

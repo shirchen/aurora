@@ -71,7 +71,7 @@ public class WebhookModule extends AbstractModule {
   protected void configure() {
     if (enableWebhook) {
       WebhookInfo webhookInfo = parseWebhookConfig(readWebhookFile());
-      int timeout = webhookInfo.getConnectonTimeout();
+      int timeout = webhookInfo.getConnectonTimeoutMsec();
       RequestConfig config = RequestConfig.custom()
           .setConnectTimeout(timeout) // establish connection with server eg time to TCP handshake.
           .setConnectionRequestTimeout(timeout)  // get a connection from internal pool.
