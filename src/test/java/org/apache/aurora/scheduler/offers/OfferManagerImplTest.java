@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 
+import com.google.common.eventbus.EventBus;
 import org.apache.aurora.common.quantity.Amount;
 import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.common.stats.StatsProvider;
@@ -30,6 +31,7 @@ import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.async.DelayExecutor;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
 import org.apache.aurora.scheduler.base.Tasks;
+import org.apache.aurora.scheduler.events.EventSink;
 import org.apache.aurora.scheduler.events.PubsubEvent.DriverDisconnected;
 import org.apache.aurora.scheduler.events.PubsubEvent.HostAttributesChanged;
 import org.apache.aurora.scheduler.mesos.Driver;
@@ -96,18 +98,20 @@ public class OfferManagerImplTest extends EasyMockTest {
   private Driver driver;
   private FakeScheduledExecutor clock;
   private OfferManagerImpl offerManager;
+  private EventSink eventSink;
 
   @Before
   public void setUp() {
     driver = createMock(Driver.class);
     DelayExecutor executorMock = createMock(DelayExecutor.class);
     clock = FakeScheduledExecutor.fromDelayExecutor(executorMock);
+    eventSink = createMock(EventSink.class);
     addTearDown(clock::assertEmpty);
     OfferSettings offerSettings = new OfferSettings(
         Amount.of(OFFER_FILTER_SECONDS, Time.SECONDS),
         () -> RETURN_DELAY);
     StatsProvider stats = new FakeStatsProvider();
-    offerManager = new OfferManagerImpl(driver, offerSettings, stats, executorMock);
+    offerManager = new OfferManagerImpl(driver, offerSettings, stats, executorMock, eventSink);
   }
 
   @Test
