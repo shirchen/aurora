@@ -23,7 +23,6 @@ import javax.inject.Inject;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.Optional;
-<<<<<<< HEAD
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
@@ -32,9 +31,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Ordering;
-=======
-import com.google.common.collect.*;
->>>>>>> working prototype (minus reconciliation temporarily broken)
 import com.google.common.eventbus.Subscribe;
 
 import org.apache.aurora.common.inject.TimedInterceptor.Timed;
@@ -52,7 +48,6 @@ import org.apache.aurora.scheduler.events.PubsubEvent.DriverDisconnected;
 import org.apache.aurora.scheduler.events.PubsubEvent.EventSubscriber;
 import org.apache.aurora.scheduler.mesos.Driver;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
-import org.apache.commons.collections.ArrayStack;
 import org.apache.mesos.Protos;
 import org.apache.mesos.Protos.Offer.Operation;
 import org.apache.mesos.Protos.OfferID;
@@ -292,7 +287,7 @@ public interface OfferManager extends EventSubscriber {
         for (Protos.Resource resource: resourceList) {
           Protos.Resource.ReservationInfo resInfo = resource.getReservation();
           if (resInfo.isInitialized()) { // TODO: consider using resInfo.hasLabels?
-            this.eventSink.post(new PubsubEvent.OfferAdded(offer));
+//            this.eventSink.post(new PubsubEvent.OfferAdded(offer));
           }
         }
 
