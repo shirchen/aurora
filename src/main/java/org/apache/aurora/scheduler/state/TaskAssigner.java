@@ -181,7 +181,8 @@ public interface TaskAssigner {
                 taskName + " while label is " + labelValue);
             if (labelValue.equals(taskName)) {
               LOG.info("Found our reservation");
-              found = true;
+              // Temporarily commenting out
+//              found = true;
 
             }
           }
@@ -203,6 +204,7 @@ public interface TaskAssigner {
           resourceRequest.getJobState().updateAttributeAggregate(offer.getAttributes());
 
           try {
+            found = false;
             if (found) {
               // Just need to perform launch operation.
               offerManager.launchTask(offer.getOffer().getId(), taskInfo);
