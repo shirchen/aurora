@@ -193,10 +193,8 @@ public interface OfferManager extends EventSubscriber {
     @Override
     public void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList) {
       LOG.info("Inside unReserveOffer got resources" + reservedResourceList.toString());
-//      List<Protos.Resource> resourceList = new ArrayList<>();
       for (Protos.Resource resource: reservedResourceList) {
         LOG.info("Looping over resources to unreserve: " + resource.toString());
-//        Protos.Resource.newBuilder(resource).setReservation()
       }
 //      this.hostOffers.removeFromDynamic(groupKey, offerId);
       Operation unreserve = Protos.Offer.Operation.newBuilder()
@@ -287,7 +285,7 @@ public interface OfferManager extends EventSubscriber {
         for (Protos.Resource resource: resourceList) {
           Protos.Resource.ReservationInfo resInfo = resource.getReservation();
           if (resInfo.isInitialized()) { // TODO: consider using resInfo.hasLabels?
-//            this.eventSink.post(new PubsubEvent.OfferAdded(offer));
+            this.eventSink.post(new PubsubEvent.OfferAdded(offer));
           }
         }
 
