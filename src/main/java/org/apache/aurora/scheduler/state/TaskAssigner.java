@@ -188,9 +188,6 @@ public interface TaskAssigner {
           }
         }
 
-
-//        TierInfo tierInfo = tierManager.getTier(groupKey.getTask());
-        TierInfo tierInfo = tierManager.getTier(groupKey.getTask());
         Set<Veto> vetoes = filter.filter(
             new UnusedResource(offer.getResourceBag(tierInfo), offer.getAttributes()),
             resourceRequest);
