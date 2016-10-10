@@ -13,19 +13,26 @@
  */
 package org.apache.aurora.scheduler.base;
 
+import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Objects;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.primitives.Ints;
 
 import org.apache.aurora.gen.ScheduleStatus;
 import org.apache.aurora.gen.TaskQuery;
+import org.apache.aurora.scheduler.offers.OfferReconciler;
 import org.apache.aurora.scheduler.storage.entities.IInstanceKey;
 import org.apache.aurora.scheduler.storage.entities.IJobKey;
 import org.apache.aurora.scheduler.storage.entities.ITaskQuery;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static java.util.Objects.requireNonNull;
 
@@ -34,7 +41,7 @@ import static java.util.Objects.requireNonNull;
  * TODO(Sathya): Add some basic unit tests for isJobScoped and isOnlyJobScoped.
  */
 public final class Query {
-
+  private static final Logger LOG = LoggerFactory.getLogger(Query.class);
   private Query() {
     // Utility.
   }
@@ -360,6 +367,17 @@ public final class Query {
      */
     public Builder active() {
       return byStatus(Tasks.ACTIVE_STATES);
+    }
+
+    public Builder activeNotRunning() {
+      ArrayList<ScheduleStatus> filteredStatus = new ArrayList<ScheduleStatus>();
+      for (ScheduleStatus ss: Tasks.ACTIVE_STATES) {
+        if (ss != ScheduleStatus.RUNNING) {
+          filteredStatus.add(ss);
+        }
+      }
+//      LOG.info("Filtered list of tasks: " + filteredStatus.toString());
+      return byStatus(filteredStatus);
     }
 
     /**
