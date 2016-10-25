@@ -6,6 +6,7 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Maps;
 import com.google.common.eventbus.Subscribe;
 import org.apache.aurora.gen.JobKey;
 import org.apache.aurora.gen.ScheduleStatus;
@@ -27,6 +28,8 @@ import javax.inject.Inject;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 
 //TODO: add code that will occasionally kick off and reconcile number of tasks with number of reserved offers
@@ -71,37 +74,39 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
     //TODO: we should only unreserve resource that we reserved, not the entire offer. Is this true?
     boolean unreserve = false;
 
+    LOG.info("Inside offerAdded callback with state of: " + offerManager.getReservedTasks().toString());
+
+//    LOG.info("Sleeping");
+//    try {
+//      // In milliseconds.
+//      Thread.sleep(6000);
+//    } catch (Exception e) {
+//      LOG.info("Caught exception on sleep");
+//    }
+//    LOG.info("Woke up");
+
+    String task_name = "";
+    // How do we know that this is our our offer?
+
     for (Protos.Resource resource: resourceList) {
       Protos.Resource.ReservationInfo resInfo = resource.getReservation();
       Protos.Labels labels = resInfo.getLabels();
       for (Protos.Label label: labels.getLabelsList()) {
         // TODO: how to loop through two labels
-        String task_name = label.getValue();
+        task_name = label.getValue();
         LOG.info(("Found task_name " + task_name));
         // task_name is gonna be of 'role/env/job_name/0' format.
 
 
-        String jobKey = task_name;
-
-        LOG.info("jobKey" + jobKey);
-
-//        String instanceId = task_name.substring(task_name.lastIndexOf('/') + 1);
-//        LOG.info("instanceId " + instanceId);
+        LOG.info("task_name: " + task_name);
 
         List<String> parsed = Splitter.on("/").splitToList(task_name);
         IJobKey jobKey2 = JobKeys.from(parsed.get(0), parsed.get(1), parsed.get(2));
         int instanceId = Integer.parseInt(parsed.get(3));
-//        String instance_id = parsed[parsed.size()-1];
-//        String job_key = parsed;
-//        InstanceKeys.from(task_name, instance_id);
-//        storeProvider.getTaskStore().fetchTasks(Query.instanceScoped(task_name)
-
-
-//        Query.instanceScoped(jobKey2, instanceId);
-
 
         //TODO: scope down to all in transition state but not RUNNING, since RUNNING means that
         // it could be an extra offer with changed resources.
+
         Iterable<IScheduledTask> foundTasks = storage.read(
             storeProvider -> storeProvider.getTaskStore().fetchTasks(Query.instanceScoped(jobKey2, instanceId).activeNotRunning()));
 
@@ -142,9 +147,12 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
           break;
         }
       }
+      // We unreserve inside this for loop because we dont want to unreserve resources we did not reserve.
       if (unreserve) {
         // TODO: Here we are unreserving one resource at a time. We should batch them and do them all at once.
+        LOG.info("Attempting to unreserve resource" + offer.getOffer().getId() + "for task " + task_name);
         this.offerManager.unReserveOffer(offer.getOffer().getId(), Arrays.asList(resource));
+        break;
       }
     }
   }

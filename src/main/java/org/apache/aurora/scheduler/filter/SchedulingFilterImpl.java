@@ -27,11 +27,14 @@ import org.apache.aurora.common.inject.TimedInterceptor.Timed;
 import org.apache.aurora.gen.MaintenanceMode;
 import org.apache.aurora.gen.TaskConstraint;
 import org.apache.aurora.scheduler.configuration.ConfigurationManager;
+import org.apache.aurora.scheduler.offers.OfferReconciler;
 import org.apache.aurora.scheduler.resources.ResourceBag;
 import org.apache.aurora.scheduler.resources.ResourceType;
 import org.apache.aurora.scheduler.storage.entities.IAttribute;
 import org.apache.aurora.scheduler.storage.entities.IConstraint;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.aurora.gen.MaintenanceMode.DRAINED;
 import static org.apache.aurora.gen.MaintenanceMode.DRAINING;
@@ -43,6 +46,7 @@ import static org.apache.aurora.scheduler.configuration.ConfigurationManager.DED
  */
 public class SchedulingFilterImpl implements SchedulingFilter {
   private static final Set<MaintenanceMode> VETO_MODES = EnumSet.of(DRAINING, DRAINED);
+  private static final Logger LOG = LoggerFactory.getLogger(SchedulingFilterImpl.class);
 
   @VisibleForTesting
   static int scale(double value, int range) {
@@ -56,12 +60,13 @@ public class SchedulingFilterImpl implements SchedulingFilter {
       ResourceType resourceType,
       double available,
       double requested) {
-
+    LOG.info("avail:" + available + "requested:" + requested);
     double tooLarge = requested - available;
     if (tooLarge > 0) {
       vetoes.add(Veto.insufficientResources(
           resourceType.getAuroraName(),
           scale(tooLarge, resourceType.getScalingRange())));
+      LOG.info("Vetoing " + resourceType);
     }
   }
 
