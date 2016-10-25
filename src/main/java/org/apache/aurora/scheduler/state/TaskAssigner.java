@@ -148,7 +148,7 @@ public interface TaskAssigner {
       Integer timeNow =  (int)timeSeconds;
       LOG.info("Waited " + (timeNow - startedToWaitAt) + "secs");
       LOG.info("Map:" + this.taskIdTostart);
-      // If waited for more than 5 minutes then just reserve the damn thing.
+      // If waited for more than 1 minute then just reserve the damn thing.
       if (timeNow > startedToWaitAt + 60*1) {
         enoughWaiting = true;
       }
@@ -197,10 +197,14 @@ public interface TaskAssigner {
       Iterator<String> remainingTasks = taskIds.iterator();
       String taskId = remainingTasks.next();
 
-      LOG.info("TaskID is" + taskId);
+//      LOG.info("TaskID is" + taskId);
       // TODO: figure out how to look for an existing offer
-      LOG.info("Looking at TaskGroupKey " + groupKey);
+//      LOG.info("Looking at TaskGroupKey " + groupKey);
       for (HostOffer offer : offerManager.getOffers(groupKey)) {
+
+        LOG.info("List of all offers we are trying to find for " + groupKey + "is: " + offerManager.getOffers(groupKey));
+
+
         Optional<TaskGroupKey> reservedGroup = Optional.fromNullable(slaveReservations.get(offer.getOffer().getSlaveId().getValue()));
 //        LOG.info("Looking at offer inside TaskAssigner" + offer.toString());
         boolean found = false;
@@ -214,7 +218,7 @@ public interface TaskAssigner {
 
 
         String taskName2 = JobKeys.canonicalString(resourceRequest.getTask().getJob());
-        LOG.info("Trying to find " + taskName2);
+        LOG.info("Trying to find " + taskName2 + " in this offer");
 
 //        boolean newTask = false;
 //        Optional<IScheduledTask> scheduledTask = storeProvider.getTaskStore().fetchTask(taskId);
@@ -236,26 +240,27 @@ public interface TaskAssigner {
         Optional<IScheduledTask> scheduledTask = storeProvider.getTaskStore().fetchTask(taskId);
         if (scheduledTask.isPresent()) {
           IAssignedTask assignedTask = scheduledTask.get().getAssignedTask();
-          LOG.info("Found our task in the store");
+//          LOG.info("Found our task in the store: " + assignedTask.toString());
           String taskName3 = taskName2 + "/" + assignedTask.getInstanceId();
-          
+
           LOG.info("looking at task " + taskName3);
+          LOG.info("State of reserved tasks " + offerManager.getReservedTasks().toString());
           if (offerManager.getReservedTasks().contains(taskName3)) {
-            // We already schedule a member of this task group so now we start to track
-            // other members.
-            LOG.info("Found task inside reserved list " + taskName3);
+            LOG.info("Found task inside reserved list so it must be dynamically reserved " + taskName3);
             long timeMillis = System.currentTimeMillis();
             long timeSeconds = TimeUnit.MILLISECONDS.toSeconds(timeMillis);
+            LOG.info("Before put: " + this.taskIdTostart.toString());
             this.taskIdTostart.putIfAbsent(taskId, (int) timeSeconds);
-
-            LOG.info("mapping " + this.taskIdTostart.toString());
+            LOG.info("After put: " + this.taskIdTostart.toString());
+            LOG.info("current timer mapping " + this.taskIdTostart.toString());
             // We must look for reserved offer and skip non-reserved ones.
             found = isReservedOfferForTask(resourceRequest, offer, assignedTask.getInstanceId());
-            LOG.info("Out of " + found);
+            LOG.info("Whether offer is reserved for this task: " + found);
             //TODO: create a timer within which we must find our offer.
             if (!found && !waitedLongEnough(taskId)) {
               // We did not find our offer nor waited long enough so continue looking for it.
-              LOG.info("Skipping offer because we are looking to launch a reserved task and did not" + " wait long enough");
+              LOG.info("Skipping offer because we are looking to launch a reserved task and did not"
+                  + " wait long enough. We can tell because the found flag is" + found);
               continue;
             }
           }
@@ -275,9 +280,11 @@ public interface TaskAssigner {
             this.taskIdTostart.remove(taskId);
             if (found) {
               // Just need to perform launch operation.
+              LOG.info("Found the offer and launching task");
               offerManager.launchTask(offer, assignedTask);
 //              return true;
             } else {
+              LOG.info("Either did not find offer or launch for the first time");
               // Need to perform reserve + launch operation.
               offerManager.launchAndReserveTask(offer, assignedTask);
 

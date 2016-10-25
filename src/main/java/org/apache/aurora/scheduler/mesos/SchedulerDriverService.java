@@ -122,7 +122,7 @@ class SchedulerDriverService extends AbstractIdleService implements Driver {
       Collection<Operation> operations,
       Protos.Filters filter) {
     ensureRunning();
-
+    LOG.info("About to unreserve offer");
     Futures.getUnchecked(driverFuture)
         .acceptOffers(ImmutableList.of(offerId), operations, filter);
   }

@@ -208,9 +208,9 @@ public interface OfferManager extends EventSubscriber {
 
     @Override
     public void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList) {
-      LOG.info("Inside unReserveOffer got resources" + reservedResourceList.toString());
+//      LOG.info("Inside unReserveOffer got resources" + reservedResourceList.toString());
       for (Protos.Resource resource: reservedResourceList) {
-        LOG.info("Looping over resources to unreserve: " + resource.toString());
+//        LOG.info("Looping over resources to unreserve: " + resource.toString());
       }
       Operation unreserve = Protos.Offer.Operation.newBuilder()
           .setType(Operation.Type.UNRESERVE)
@@ -250,7 +250,7 @@ public interface OfferManager extends EventSubscriber {
       // TODO: need driverSettings to set role here.
       List<Protos.Resource> reservedResourceList = new ArrayList<>();
       for (Protos.Resource resource: resourcesList) {
-        LOG.info("Before: requesting resource: " + resource.toString());
+//        LOG.info("Before: requesting resource: " + resource.toString());
 //        TaskGroupKey foo = TaskGroupKey.from(task);
         // Adding labels to each reservation.
         List<Protos.Label> labels = new ArrayList<>();
@@ -278,7 +278,7 @@ public interface OfferManager extends EventSubscriber {
             .build()
         );
       }
-      LOG.info("all resources" + Arrays.toString(reservedResourceList.toArray()));
+//      LOG.info("all resources" + Arrays.toString(reservedResourceList.toArray()));
       // All resources need to be tagged fresh with reservation info.
       Protos.TaskInfo newTask = task.toBuilder().clearResources().addAllResources(reservedResourceList).build();
 
@@ -319,15 +319,16 @@ public interface OfferManager extends EventSubscriber {
       } else {
         // Add a post to EventBus. eventType: .OfferAdded.
         // TODO: check if offer contains ReservationInfo
-
+        // We are posting offers which have dynamic reservation information to the Bus.
         List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
         for (Protos.Resource resource: resourceList) {
           Protos.Resource.ReservationInfo resInfo = resource.getReservation();
           if (resInfo.isInitialized()) { // TODO: consider using resInfo.hasLabels?
             this.eventSink.post(new PubsubEvent.OfferAdded(offer));
+            // POST once.
+            break;
           }
         }
-
 
         hostOffers.add(offer);
         executor.execute(
