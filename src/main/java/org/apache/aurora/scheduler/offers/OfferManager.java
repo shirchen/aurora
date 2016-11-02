@@ -83,6 +83,8 @@ public interface OfferManager extends EventSubscriber {
    */
   void reserveAndLaunchTask(HostOffer offer, IAssignedTask task);
 
+  void removeTaskId(String taskId);
+
 
   HashSet<String> getReservedTasks();
 
@@ -206,6 +208,10 @@ public interface OfferManager extends EventSubscriber {
       return this.reservedTasks;
     }
 
+    public void removeTaskId(String taskId) {
+      this.reservedTasks.remove(taskId);
+    }
+
     @Override
     public void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList) {
 //      LOG.info("Inside unReserveOffer got resources" + reservedResourceList.toString());
@@ -220,7 +226,13 @@ public interface OfferManager extends EventSubscriber {
       // TODO: find the task that was reserved with this offer.
 
       String taskName = getTaskNameFromResourceList(reservedResourceList);
-      this.reservedTasks.remove(taskName);
+
+      // TODO: If we unreserve a resource, why does this mean that we don't have the task in there anymore?
+
+
+      // THIS IS FUCKING WRONG. If we unreserve, we do NOT need to remove from the list here. This must happen in the kill process.
+
+//      this.reservedTasks.remove(taskName);
 
       List<Operation> operations = Arrays.asList(unreserve);
       driver.acceptOffers(offerId, operations, getOfferFilter());
@@ -242,6 +254,7 @@ public interface OfferManager extends EventSubscriber {
 
     @Override
     public void reserveAndLaunchTask(HostOffer offer, IAssignedTask iAssignedTask) {
+      // This will sort our resoruces in the correct order and try to use the ones that have been reserved first.
       Protos.TaskInfo task = taskFactory.createFrom(iAssignedTask, offer.getOffer());
       OfferID offerId = offer.getOffer().getId();
       LOG.info("Task name is " + task.getName());

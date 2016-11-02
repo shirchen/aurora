@@ -47,7 +47,6 @@ import org.apache.aurora.scheduler.resources.ResourceType;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
 import org.apache.mesos.Protos;
-import org.apache.mesos.Protos.TaskInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -156,26 +155,24 @@ public interface TaskAssigner {
       return enoughWaiting;
     }
 
-    private boolean isReservedOfferForTask(ResourceRequest resourceRequest, HostOffer offer, int instanceId) {
+    private boolean hasReservedResourcesInsideOfferForTask(ResourceRequest resourceRequest, HostOffer offer, int instanceId) {
       boolean found = false;
-        // skip unless we find our offer
-//        LOG.info("Skipping offer because we are looking to launch a reserved task");
-        List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
-        for (Protos.Resource resource: resourceList) {
-          Protos.Resource.ReservationInfo resInfo = resource.getReservation();
-          Protos.Labels labels = resInfo.getLabels();
-          List<Protos.Label> labelList = labels.getLabelsList();
-          for (Protos.Label label : labelList) {
-            String labelValue = label.getValue();
-            String taskName = JobKeys.canonicalString(resourceRequest.getTask().getJob()) + "/" + instanceId;
-            LOG.info("Task name extracted from task about to be scheduled is " + taskName + " while label is " + labelValue);
-            if (labelValue.equals(taskName)) {
-              LOG.info("Found our reservation");
-              found = true;
-              break;
-            }
+      List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
+      for (Protos.Resource resource : resourceList) {
+        Protos.Resource.ReservationInfo resInfo = resource.getReservation();
+        Protos.Labels labels = resInfo.getLabels();
+        List<Protos.Label> labelList = labels.getLabelsList();
+        for (Protos.Label label : labelList) {
+          String labelValue = label.getValue();
+          String taskName = JobKeys.canonicalString(resourceRequest.getTask().getJob()) + "/" + instanceId;
+          LOG.info("Task name extracted from task about to be scheduled is " + taskName + " while label is " + labelValue);
+          if (labelValue.equals(taskName)) {
+            LOG.info("Found our reservation");
+            found = true;
+            break;
           }
         }
+      }
       return found;
     }
 
@@ -197,16 +194,11 @@ public interface TaskAssigner {
       Iterator<String> remainingTasks = taskIds.iterator();
       String taskId = remainingTasks.next();
 
-//      LOG.info("TaskID is" + taskId);
-      // TODO: figure out how to look for an existing offer
-//      LOG.info("Looking at TaskGroupKey " + groupKey);
       for (HostOffer offer : offerManager.getOffers(groupKey)) {
 
         LOG.info("List of all offers we are trying to find for " + groupKey + "is: " + offerManager.getOffers(groupKey));
 
-
         Optional<TaskGroupKey> reservedGroup = Optional.fromNullable(slaveReservations.get(offer.getOffer().getSlaveId().getValue()));
-//        LOG.info("Looking at offer inside TaskAssigner" + offer.toString());
         boolean found = false;
         if (reservedGroup.isPresent() && !reservedGroup.get().equals(groupKey)) {
           // This slave is reserved for a different task group -> skip.
@@ -230,12 +222,6 @@ public interface TaskAssigner {
 //            newTask = true;
 //          }
 //        }
-        // TODO: see how to tell if we are launching for the first time. Then we need to just launch
-        // tasks.
-
-
-        // TODO: look for an existing active task?
-
 
         Optional<IScheduledTask> scheduledTask = storeProvider.getTaskStore().fetchTask(taskId);
         if (scheduledTask.isPresent()) {
@@ -244,7 +230,10 @@ public interface TaskAssigner {
           String taskName3 = taskName2 + "/" + assignedTask.getInstanceId();
 
           LOG.info("looking at task " + taskName3);
+
+          // TODO: Maybe persist inside memory or add a new store.
           LOG.info("State of reserved tasks " + offerManager.getReservedTasks().toString());
+
           if (offerManager.getReservedTasks().contains(taskName3)) {
             LOG.info("Found task inside reserved list so it must be dynamically reserved " + taskName3);
             long timeMillis = System.currentTimeMillis();
@@ -253,9 +242,10 @@ public interface TaskAssigner {
             this.taskIdTostart.putIfAbsent(taskId, (int) timeSeconds);
             LOG.info("After put: " + this.taskIdTostart.toString());
             LOG.info("current timer mapping " + this.taskIdTostart.toString());
+
             // We must look for reserved offer and skip non-reserved ones.
-            found = isReservedOfferForTask(resourceRequest, offer, assignedTask.getInstanceId());
-            LOG.info("Whether offer is reserved for this task: " + found);
+            found = hasReservedResourcesInsideOfferForTask(resourceRequest, offer, assignedTask.getInstanceId());
+            LOG.info("Whether offer has at least one resources reserved for this task: " + found);
             //TODO: create a timer within which we must find our offer.
             if (!found && !waitedLongEnough(taskId)) {
               // We did not find our offer nor waited long enough so continue looking for it.

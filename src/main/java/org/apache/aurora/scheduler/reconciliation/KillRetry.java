@@ -32,6 +32,7 @@ import org.apache.aurora.scheduler.base.Query;
 import org.apache.aurora.scheduler.events.PubsubEvent.EventSubscriber;
 import org.apache.aurora.scheduler.events.PubsubEvent.TaskStateChange;
 import org.apache.aurora.scheduler.mesos.Driver;
+import org.apache.aurora.scheduler.state.KillManager;
 import org.apache.aurora.scheduler.storage.Storage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +50,7 @@ public class KillRetry implements EventSubscriber {
   static final String RETRIES_COUNTER = "task_kill_retries";
 
   private final Driver driver;
+  private final KillManager killManager;
   private final Storage storage;
   private final DelayExecutor executor;
   private final BackoffStrategy backoffStrategy;
@@ -57,11 +59,13 @@ public class KillRetry implements EventSubscriber {
   @Inject
   KillRetry(
       Driver driver,
+      KillManager killManager,
       Storage storage,
       @AsyncExecutor DelayExecutor executor,
       BackoffStrategy backoffStrategy,
       StatsProvider statsProvider) {
 
+    this.killManager = requireNonNull(killManager);
     this.driver = requireNonNull(driver);
     this.storage = requireNonNull(storage);
     this.executor = requireNonNull(executor);
@@ -96,7 +100,8 @@ public class KillRetry implements EventSubscriber {
         LOG.info("Task " + taskId + " not yet killed, retrying.");
 
         // Kill did not yet take effect, try again.
-        driver.killTask(taskId);
+//        driver.killTask(taskId);
+        killManager.killTask(taskId);
         killRetries.incrementAndGet();
         tryLater();
       }

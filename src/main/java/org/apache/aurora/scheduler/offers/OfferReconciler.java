@@ -110,10 +110,6 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
         Iterable<IScheduledTask> foundTasks = storage.read(
             storeProvider -> storeProvider.getTaskStore().fetchTasks(Query.instanceScoped(jobKey2, instanceId).activeNotRunning()));
 
-
-//        IJobKey jobKey = JobKeys.parse(task_name);
-
-
         // Will return all instances of active tasks for a jobKey. After a task is killed for an update, it transitions
         // into a PENDING state as part of same transaction. So if we dont have any active tasks, then we are OK.
 

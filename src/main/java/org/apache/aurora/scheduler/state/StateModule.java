@@ -23,6 +23,7 @@ import org.apache.aurora.scheduler.events.PubsubEventModule;
 import org.apache.aurora.scheduler.mesos.MesosTaskFactory;
 import org.apache.aurora.scheduler.mesos.MesosTaskFactory.MesosTaskFactoryImpl;
 import org.apache.aurora.scheduler.state.MaintenanceController.MaintenanceControllerImpl;
+import org.apache.aurora.scheduler.state.KillManager.KillManagerImpl;
 import org.apache.aurora.scheduler.state.TaskAssigner.TaskAssignerImpl;
 import org.apache.aurora.scheduler.state.UUIDGenerator.UUIDGeneratorImpl;
 
@@ -39,6 +40,9 @@ public class StateModule extends AbstractModule {
 
     bind(StateManager.class).to(StateManagerImpl.class);
     bind(StateManagerImpl.class).in(Singleton.class);
+
+    bind(KillManager.class).to(KillManagerImpl.class);
+    bind(KillManagerImpl.class).in(Singleton.class);
 
     bind(UUIDGenerator.class).to(UUIDGeneratorImpl.class);
     bind(UUIDGeneratorImpl.class).in(Singleton.class);
