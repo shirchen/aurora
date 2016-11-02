@@ -100,7 +100,6 @@ public class KillRetry implements EventSubscriber {
         LOG.info("Task " + taskId + " not yet killed, retrying.");
 
         // Kill did not yet take effect, try again.
-//        driver.killTask(taskId);
         killManager.killTask(taskId);
         killRetries.incrementAndGet();
         tryLater();

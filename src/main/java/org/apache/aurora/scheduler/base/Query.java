@@ -376,7 +376,6 @@ public final class Query {
           filteredStatus.add(ss);
         }
       }
-//      LOG.info("Filtered list of tasks: " + filteredStatus.toString());
       return byStatus(filteredStatus);
     }
 
