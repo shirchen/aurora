@@ -77,6 +77,7 @@ public class StateManagerImpl implements StateManager {
 
   private final Clock clock;
   private final Driver driver;
+  private final KillManager killManager;
   private final TaskIdGenerator taskIdGenerator;
   private final EventSink eventSink;
   private final RescheduleCalculator rescheduleCalculator;
@@ -85,12 +86,14 @@ public class StateManagerImpl implements StateManager {
   StateManagerImpl(
       final Clock clock,
       Driver driver,
+      KillManager killManager,
       TaskIdGenerator taskIdGenerator,
       EventSink eventSink,
       RescheduleCalculator rescheduleCalculator) {
 
     this.clock = requireNonNull(clock);
     this.driver = requireNonNull(driver);
+    this.killManager = requireNonNull(killManager);
     this.taskIdGenerator = requireNonNull(taskIdGenerator);
     this.eventSink = requireNonNull(eventSink);
     this.rescheduleCalculator = requireNonNull(rescheduleCalculator);
@@ -334,7 +337,8 @@ public class StateManagerImpl implements StateManager {
           break;
 
         case KILL:
-          driver.killTask(taskId);
+          this.killManager.killTask(taskId);
+//          driver.killTask(taskId);
           break;
 
         case DELETE:
