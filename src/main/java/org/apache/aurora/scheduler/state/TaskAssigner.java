@@ -212,21 +212,9 @@ public interface TaskAssigner {
         String taskName2 = JobKeys.canonicalString(resourceRequest.getTask().getJob());
         LOG.info("Trying to find " + taskName2 + " in this offer");
 
-//        boolean newTask = false;
-//        Optional<IScheduledTask> scheduledTask = storeProvider.getTaskStore().fetchTask(taskId);
-//        if (scheduledTask.isPresent()) {
-//          // TODO: try to figure out if there was a killed/scheduled event in the past.
-//          LOG.info("List of events for this task" + scheduledTask.get().getTaskEvents().toString());
-////          scheduledTask.get().getAssignedTask()
-//          if (scheduledTask.get().getTaskEvents().size() == 1) {
-//            newTask = true;
-//          }
-//        }
-
         Optional<IScheduledTask> scheduledTask = storeProvider.getTaskStore().fetchTask(taskId);
         if (scheduledTask.isPresent()) {
           IAssignedTask assignedTask = scheduledTask.get().getAssignedTask();
-//          LOG.info("Found our task in the store: " + assignedTask.toString());
           String taskName3 = taskName2 + "/" + assignedTask.getInstanceId();
 
           LOG.info("looking at task " + taskName3);
@@ -246,7 +234,6 @@ public interface TaskAssigner {
             // We must look for reserved offer and skip non-reserved ones.
             found = hasReservedResourcesInsideOfferForTask(resourceRequest, offer, assignedTask.getInstanceId());
             LOG.info("Whether offer has at least one resources reserved for this task: " + found);
-            //TODO: create a timer within which we must find our offer.
             if (!found && !waitedLongEnough(taskId)) {
               // We did not find our offer nor waited long enough so continue looking for it.
               LOG.info("Skipping offer because we are looking to launch a reserved task and did not"

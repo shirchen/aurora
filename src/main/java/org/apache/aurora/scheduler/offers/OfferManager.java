@@ -13,7 +13,6 @@
  */
 package org.apache.aurora.scheduler.offers;
 
-import java.lang.reflect.Array;
 import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicLong;
@@ -41,7 +40,6 @@ import org.apache.aurora.gen.MaintenanceMode;
 import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.async.AsyncModule.AsyncExecutor;
 import org.apache.aurora.scheduler.async.DelayExecutor;
-import org.apache.aurora.scheduler.base.JobKeys;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
 import org.apache.aurora.scheduler.events.EventSink;
 import org.apache.aurora.scheduler.events.PubsubEvent;
@@ -214,42 +212,13 @@ public interface OfferManager extends EventSubscriber {
 
     @Override
     public void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList) {
-//      LOG.info("Inside unReserveOffer got resources" + reservedResourceList.toString());
-      for (Protos.Resource resource: reservedResourceList) {
-//        LOG.info("Looping over resources to unreserve: " + resource.toString());
-      }
       Operation unreserve = Protos.Offer.Operation.newBuilder()
           .setType(Operation.Type.UNRESERVE)
           .setUnreserve(
               Protos.Offer.Operation.Unreserve.newBuilder().addAllResources(reservedResourceList).build()).build();
 
-      // TODO: find the task that was reserved with this offer.
-
-      String taskName = getTaskNameFromResourceList(reservedResourceList);
-
-      // TODO: If we unreserve a resource, why does this mean that we don't have the task in there anymore?
-
-
-      // THIS IS FUCKING WRONG. If we unreserve, we do NOT need to remove from the list here. This must happen in the kill process.
-
-//      this.reservedTasks.remove(taskName);
-
       List<Operation> operations = Arrays.asList(unreserve);
       driver.acceptOffers(offerId, operations, getOfferFilter());
-    }
-
-    private String getTaskNameFromResourceList(List<Protos.Resource> resourceList) {
-      String taskName = null;
-      for (Protos.Resource resource: resourceList) {
-        Protos.Resource.ReservationInfo resInfo = resource.getReservation();
-        Protos.Labels labels = resInfo.getLabels();
-        List<Protos.Label> labelList = labels.getLabelsList();
-        for (Protos.Label label: labelList) {
-          taskName = label.getValue();
-          break;
-        }
-      }
-      return taskName;
     }
 
     @Override
@@ -263,23 +232,12 @@ public interface OfferManager extends EventSubscriber {
       // TODO: need driverSettings to set role here.
       List<Protos.Resource> reservedResourceList = new ArrayList<>();
       for (Protos.Resource resource: resourcesList) {
-//        LOG.info("Before: requesting resource: " + resource.toString());
-//        TaskGroupKey foo = TaskGroupKey.from(task);
-        // Adding labels to each reservation.
         List<Protos.Label> labels = new ArrayList<>();
         labels.add(Protos.Label.newBuilder()
             .setKey("task_name")
-//            .setValue(task.getName())
             .setValue(taskNameInstanceId)
               .build()
         );
-        // can not work with task_ids as they will change but labels will not.
-//        labels.add(Protos.Label.newBuilder()
-//            .setKey("task_name")
-//            .setValue(task.getTaskId().getValue()).
-//                build()
-//        );
-
         reservedResourceList.add(
             Protos.Resource.newBuilder(resource)
                 .setRole("aurora-role")
@@ -291,8 +249,6 @@ public interface OfferManager extends EventSubscriber {
             .build()
         );
       }
-//      LOG.info("all resources" + Arrays.toString(reservedResourceList.toArray()));
-      // All resources need to be tagged fresh with reservation info.
       Protos.TaskInfo newTask = task.toBuilder().clearResources().addAllResources(reservedResourceList).build();
 
       Operation reserve = Protos.Offer.Operation.newBuilder()
@@ -336,9 +292,8 @@ public interface OfferManager extends EventSubscriber {
         List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
         for (Protos.Resource resource: resourceList) {
           Protos.Resource.ReservationInfo resInfo = resource.getReservation();
-          if (resInfo.isInitialized()) { // TODO: consider using resInfo.hasLabels?
+          if (resInfo.isInitialized()) {
             this.eventSink.post(new PubsubEvent.OfferAdded(offer));
-            // POST once.
             break;
           }
         }

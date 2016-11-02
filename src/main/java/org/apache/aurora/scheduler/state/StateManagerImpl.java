@@ -339,7 +339,6 @@ public class StateManagerImpl implements StateManager {
 
         case KILL:
           this.killManager.killTask(taskId);
-//          driver.killTask(taskId);
           break;
 
         case DELETE:
