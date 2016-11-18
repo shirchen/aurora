@@ -19,7 +19,12 @@ import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
 import org.apache.aurora.scheduler.events.PubsubEvent;
 import org.apache.aurora.scheduler.offers.OfferManager;
+import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.mesos.Protos;
+import org.apache.mesos.Protos.Offer;
+
+import java.util.HashSet;
+import java.util.List;
 
 public class FakeOfferManager implements OfferManager {
   @Override
@@ -29,11 +34,6 @@ public class FakeOfferManager implements OfferManager {
 
   @Override
   public void cancelOffer(Protos.OfferID offerId) {
-    // no-op
-  }
-
-  @Override
-  public void launchTask(Protos.OfferID offerId, Protos.TaskInfo taskInfo) throws LaunchException {
     // no-op
   }
 
@@ -61,4 +61,35 @@ public class FakeOfferManager implements OfferManager {
   public Optional<HostOffer> getOffer(Protos.SlaveID slaveId) {
     return Optional.absent();
   }
+
+  @Override
+  public void unReserveOffer(Protos.OfferID offerId, List<Protos.Resource> reservedResourceList) {
+
+  }
+
+  @Override
+  public void reserveAndLaunchTask(HostOffer offer, IAssignedTask task) {
+
+  }
+
+  @Override
+  public void removeTaskId(String taskId) {
+
+  }
+
+  @Override
+  public HashSet<String> getReservedTasks() {
+    return new HashSet<>();
+  }
+
+  @Override
+  public void launchTask(Offer offer, IAssignedTask task) throws LaunchException {
+
+  }
+
+  @Override
+  public void launchAndReserveTask(HostOffer offer, IAssignedTask task) throws LaunchException {
+
+  }
+
 }

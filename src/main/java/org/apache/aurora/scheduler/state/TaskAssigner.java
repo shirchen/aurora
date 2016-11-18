@@ -258,7 +258,7 @@ public interface TaskAssigner {
             if (found) {
               // Just need to perform launch operation.
               LOG.info("Found the offer and launching task");
-              offerManager.launchTask(offer, assignedTask);
+              offerManager.launchTask(offer.getOffer(), assignedTask);
 //              return true;
             } else {
               LOG.info("Either did not find offer or launch for the first time");

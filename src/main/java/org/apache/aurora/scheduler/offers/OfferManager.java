@@ -50,6 +50,7 @@ import org.apache.aurora.scheduler.mesos.MesosTaskFactory;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 import org.apache.mesos.Protos;
+import org.apache.mesos.Protos.Offer;
 import org.apache.mesos.Protos.Offer.Operation;
 import org.apache.mesos.Protos.OfferID;
 import org.apache.mesos.Protos.SlaveID;
@@ -76,7 +77,7 @@ public interface OfferManager extends EventSubscriber {
   /**
    * Reserve the offer on behalf of the scheduler.
    *
-   * @param offerId Matched offer ID.
+   * @param offer Matched offer.
    * @param task Matched task info.
    */
   void reserveAndLaunchTask(HostOffer offer, IAssignedTask task);
@@ -116,11 +117,11 @@ public interface OfferManager extends EventSubscriber {
   /**
    * Launches the task matched against the offer.
    *
-   * @param offerId Matched offer ID.
+   * @param offer Matched offer.
    * @param task Matched task info.
    * @throws LaunchException If there was an error launching the task.
    */
-  void launchTask(HostOffer offer, IAssignedTask task) throws LaunchException;
+  void launchTask(Offer offer, IAssignedTask task) throws LaunchException;
 
   /**
    * Notifies the offer queue that a host's attributes have changed.
@@ -504,14 +505,14 @@ public interface OfferManager extends EventSubscriber {
 
     @Timed("offer_manager_launch_task")
     @Override
-    public void launchTask(HostOffer offer, IAssignedTask iAssignedTask) throws LaunchException {
+    public void launchTask(Offer offer, IAssignedTask iAssignedTask) throws LaunchException {
       // Guard against an offer being removed after we grabbed it from the iterator.
       // If that happens, the offer will not exist in hostOffers, and we can immediately
       // send it back to LOST for quick reschedule.
       // Removing while iterating counts on the use of a weakly-consistent iterator being used,
       // which is a feature of ConcurrentSkipListSet.
-      OfferID offerId = offer.getOffer().getId();
-      Protos.TaskInfo task = taskFactory.createFrom(iAssignedTask, offer.getOffer());
+      OfferID offerId = offer.getId();
+      Protos.TaskInfo task = taskFactory.createFrom(iAssignedTask, offer);
       if (hostOffers.remove(offerId)) {
         try {
           Operation launch = Operation.newBuilder()

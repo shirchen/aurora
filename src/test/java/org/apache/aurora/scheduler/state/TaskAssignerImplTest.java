@@ -322,7 +322,7 @@ public class TaskAssignerImplTest extends EasyMockTest {
     expectAssignTask(MESOS_OFFER);
     expect(taskFactory.createFrom(TASK.getAssignedTask(), OFFER.getOffer()))
         .andReturn(TASK_INFO);
-    offerManager.launchTask(OFFER.getOffer().getId(), TASK_INFO);
+    offerManager.launchTask(OFFER.getOffer(), IAssignedTask.build(TASK.newBuilder().getAssignedTask()));
 
     control.replay();
 

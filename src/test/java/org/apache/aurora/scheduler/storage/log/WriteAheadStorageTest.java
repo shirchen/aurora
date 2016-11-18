@@ -32,13 +32,7 @@ import org.apache.aurora.scheduler.base.JobKeys;
 import org.apache.aurora.scheduler.base.TaskTestUtil;
 import org.apache.aurora.scheduler.events.EventSink;
 import org.apache.aurora.scheduler.events.PubsubEvent;
-import org.apache.aurora.scheduler.storage.AttributeStore;
-import org.apache.aurora.scheduler.storage.CronJobStore;
-import org.apache.aurora.scheduler.storage.JobUpdateStore;
-import org.apache.aurora.scheduler.storage.LockStore;
-import org.apache.aurora.scheduler.storage.QuotaStore;
-import org.apache.aurora.scheduler.storage.SchedulerStore;
-import org.apache.aurora.scheduler.storage.TaskStore;
+import org.apache.aurora.scheduler.storage.*;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 import org.apache.aurora.scheduler.storage.entities.IJobUpdateKey;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
@@ -57,6 +51,7 @@ public class WriteAheadStorageTest extends EasyMockTest {
   private TaskStore.Mutable taskStore;
   private AttributeStore.Mutable attributeStore;
   private JobUpdateStore.Mutable jobUpdateStore;
+  private ReservationStore.Mutable reservationStore;
   private EventSink eventSink;
   private WriteAheadStorage storage;
 
@@ -66,6 +61,7 @@ public class WriteAheadStorageTest extends EasyMockTest {
     taskStore = createMock(TaskStore.Mutable.class);
     attributeStore = createMock(AttributeStore.Mutable.class);
     jobUpdateStore = createMock(JobUpdateStore.Mutable.class);
+    reservationStore = createMock(ReservationStore.Mutable.class);
     eventSink = createMock(EventSink.class);
 
     storage = new WriteAheadStorage(
@@ -77,6 +73,7 @@ public class WriteAheadStorageTest extends EasyMockTest {
         createMock(QuotaStore.Mutable.class),
         attributeStore,
         jobUpdateStore,
+        reservationStore,
         LoggerFactory.getLogger(WriteAheadStorageTest.class),
         eventSink);
   }

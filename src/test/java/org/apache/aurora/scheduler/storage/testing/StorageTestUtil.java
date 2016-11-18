@@ -18,18 +18,12 @@ import com.google.common.collect.ImmutableSet;
 
 import org.apache.aurora.common.testing.easymock.EasyMockTest;
 import org.apache.aurora.scheduler.base.Query;
-import org.apache.aurora.scheduler.storage.AttributeStore;
-import org.apache.aurora.scheduler.storage.CronJobStore;
-import org.apache.aurora.scheduler.storage.JobUpdateStore;
-import org.apache.aurora.scheduler.storage.LockStore;
-import org.apache.aurora.scheduler.storage.QuotaStore;
-import org.apache.aurora.scheduler.storage.SchedulerStore;
+import org.apache.aurora.scheduler.storage.*;
 import org.apache.aurora.scheduler.storage.Storage.MutableStoreProvider;
 import org.apache.aurora.scheduler.storage.Storage.MutateWork;
 import org.apache.aurora.scheduler.storage.Storage.NonVolatileStorage;
 import org.apache.aurora.scheduler.storage.Storage.StoreProvider;
 import org.apache.aurora.scheduler.storage.Storage.Work;
-import org.apache.aurora.scheduler.storage.TaskStore;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
 import org.easymock.Capture;
 import org.easymock.IExpectationSetters;
@@ -53,6 +47,7 @@ public class StorageTestUtil {
   public final LockStore.Mutable lockStore;
   public final SchedulerStore.Mutable schedulerStore;
   public final JobUpdateStore.Mutable jobUpdateStore;
+  public final ReservationStore.Mutable reservationStore;
   public final NonVolatileStorage storage;
 
   /**
@@ -70,6 +65,7 @@ public class StorageTestUtil {
     this.lockStore = easyMock.createMock(LockStore.Mutable.class);
     this.schedulerStore = easyMock.createMock(SchedulerStore.Mutable.class);
     this.jobUpdateStore = easyMock.createMock(JobUpdateStore.Mutable.class);
+    this.reservationStore = easyMock.createMock(ReservationStore.Mutable.class);
     this.storage = easyMock.createMock(NonVolatileStorage.class);
   }
 
@@ -104,6 +100,7 @@ public class StorageTestUtil {
     expect(mutableStoreProvider.getLockStore()).andReturn(lockStore).anyTimes();
     expect(mutableStoreProvider.getSchedulerStore()).andReturn(schedulerStore).anyTimes();
     expect(mutableStoreProvider.getJobUpdateStore()).andReturn(jobUpdateStore).anyTimes();
+    expect(mutableStoreProvider.getReservationStore()).andReturn(reservationStore).anyTimes();
     expectRead().anyTimes();
     expectWrite().anyTimes();
   }

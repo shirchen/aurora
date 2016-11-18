@@ -180,6 +180,7 @@ public class LogStorageTest extends EasyMockTest {
         storageUtil.quotaStore,
         storageUtil.attributeStore,
         storageUtil.jobUpdateStore,
+        storageUtil.reservationStore,
         eventSink,
         new ReentrantLock(),
         TaskTestUtil.THRIFT_BACKFILL);

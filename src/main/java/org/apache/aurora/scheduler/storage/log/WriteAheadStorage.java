@@ -307,6 +307,17 @@ class WriteAheadStorage extends WriteAheadStorageForwarder implements
   }
 
   @Override
+  public void removeTaskId(String foo) {
+  }
+
+  @Override
+  public void saveReserervedTasks(String foo) {
+
+  }
+
+
+
+  @Override
   public void deleteAllTasks() {
     throw new UnsupportedOperationException(
         "Unsupported since casual storage users should never be doing this.");

@@ -17,16 +17,10 @@ import org.apache.aurora.common.stats.StatsProvider;
 import org.apache.aurora.common.testing.easymock.EasyMockTest;
 import org.apache.aurora.scheduler.async.GatedWorkQueue;
 import org.apache.aurora.scheduler.async.GatedWorkQueue.GatedOperation;
-import org.apache.aurora.scheduler.storage.AttributeStore;
-import org.apache.aurora.scheduler.storage.CronJobStore;
-import org.apache.aurora.scheduler.storage.JobUpdateStore;
-import org.apache.aurora.scheduler.storage.LockStore;
-import org.apache.aurora.scheduler.storage.QuotaStore;
-import org.apache.aurora.scheduler.storage.SchedulerStore;
+import org.apache.aurora.scheduler.storage.*;
 import org.apache.aurora.scheduler.storage.Storage.MutateWork.NoResult;
 import org.apache.aurora.scheduler.storage.Storage.StorageException;
 import org.apache.aurora.scheduler.storage.Storage.Work;
-import org.apache.aurora.scheduler.storage.TaskStore;
 import org.apache.ibatis.exceptions.PersistenceException;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.easymock.EasyMock;
@@ -60,6 +54,7 @@ public class DbStorageTest extends EasyMockTest {
         createMock(LockStore.Mutable.class),
         createMock(QuotaStore.Mutable.class),
         createMock(JobUpdateStore.Mutable.class),
+        createMock(ReservationStore.Mutable.class),
         statsProvider);
   }
 
