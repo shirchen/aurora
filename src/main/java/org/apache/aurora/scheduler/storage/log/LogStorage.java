@@ -54,6 +54,7 @@ import org.apache.aurora.scheduler.storage.DistributedSnapshotStore;
 import org.apache.aurora.scheduler.storage.JobUpdateStore;
 import org.apache.aurora.scheduler.storage.LockStore;
 import org.apache.aurora.scheduler.storage.QuotaStore;
+import org.apache.aurora.scheduler.storage.ReservationStore;
 import org.apache.aurora.scheduler.storage.SchedulerStore;
 import org.apache.aurora.scheduler.storage.SnapshotStore;
 import org.apache.aurora.scheduler.storage.Storage;
@@ -184,6 +185,7 @@ public class LogStorage implements NonVolatileStorage, DistributedSnapshotStore 
   private final QuotaStore.Mutable writeBehindQuotaStore;
   private final AttributeStore.Mutable writeBehindAttributeStore;
   private final JobUpdateStore.Mutable writeBehindJobUpdateStore;
+  private final ReservationStore.Mutable writeBehindReservationStore;
   private final ReentrantLock writeLock;
   private final ThriftBackfill thriftBackfill;
 
@@ -217,6 +219,7 @@ public class LogStorage implements NonVolatileStorage, DistributedSnapshotStore 
       @Volatile QuotaStore.Mutable quotaStore,
       @Volatile AttributeStore.Mutable attributeStore,
       @Volatile JobUpdateStore.Mutable jobUpdateStore,
+      @Volatile ReservationStore.Mutable reservationStore,
       EventSink eventSink,
       ReentrantLock writeLock,
       ThriftBackfill thriftBackfill) {
@@ -233,6 +236,7 @@ public class LogStorage implements NonVolatileStorage, DistributedSnapshotStore 
         quotaStore,
         attributeStore,
         jobUpdateStore,
+        reservationStore,
         eventSink,
         writeLock,
         thriftBackfill);
@@ -252,6 +256,7 @@ public class LogStorage implements NonVolatileStorage, DistributedSnapshotStore 
       QuotaStore.Mutable quotaStore,
       AttributeStore.Mutable attributeStore,
       JobUpdateStore.Mutable jobUpdateStore,
+      ReservationStore.Mutable reservationStore,
       EventSink eventSink,
       ReentrantLock writeLock,
       ThriftBackfill thriftBackfill) {
@@ -273,6 +278,7 @@ public class LogStorage implements NonVolatileStorage, DistributedSnapshotStore 
     this.writeBehindQuotaStore = requireNonNull(quotaStore);
     this.writeBehindAttributeStore = requireNonNull(attributeStore);
     this.writeBehindJobUpdateStore = requireNonNull(jobUpdateStore);
+    this.writeBehindReservationStore = requireNonNull(reservationStore);
     this.writeLock = requireNonNull(writeLock);
     this.thriftBackfill = requireNonNull(thriftBackfill);
     TransactionManager transactionManager = new TransactionManager() {
@@ -295,6 +301,7 @@ public class LogStorage implements NonVolatileStorage, DistributedSnapshotStore 
         quotaStore,
         attributeStore,
         jobUpdateStore,
+        reservationStore,
         LoggerFactory.getLogger(WriteAheadStorage.class),
         eventSink);
 

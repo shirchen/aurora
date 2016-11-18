@@ -36,14 +36,7 @@ import org.apache.aurora.scheduler.async.AsyncModule.AsyncExecutor;
 import org.apache.aurora.scheduler.async.GatedWorkQueue;
 import org.apache.aurora.scheduler.async.GatedWorkQueue.GatedOperation;
 import org.apache.aurora.scheduler.resources.ResourceType;
-import org.apache.aurora.scheduler.storage.AttributeStore;
-import org.apache.aurora.scheduler.storage.CronJobStore;
-import org.apache.aurora.scheduler.storage.JobUpdateStore;
-import org.apache.aurora.scheduler.storage.LockStore;
-import org.apache.aurora.scheduler.storage.QuotaStore;
-import org.apache.aurora.scheduler.storage.SchedulerStore;
-import org.apache.aurora.scheduler.storage.Storage;
-import org.apache.aurora.scheduler.storage.TaskStore;
+import org.apache.aurora.scheduler.storage.*;
 import org.apache.ibatis.builder.StaticSqlSource;
 import org.apache.ibatis.datasource.pooled.PoolState;
 import org.apache.ibatis.datasource.pooled.PooledDataSource;
@@ -84,6 +77,7 @@ class DbStorage extends AbstractIdleService implements Storage {
       final LockStore.Mutable lockStore,
       final QuotaStore.Mutable quotaStore,
       final JobUpdateStore.Mutable jobUpdateStore,
+      final ReservationStore.Mutable reservationStore,
       StatsProvider statsProvider) {
 
     this.sessionFactory = requireNonNull(sessionFactory);
@@ -96,6 +90,7 @@ class DbStorage extends AbstractIdleService implements Storage {
     requireNonNull(lockStore);
     requireNonNull(quotaStore);
     requireNonNull(jobUpdateStore);
+    requireNonNull(reservationStore);
     storeProvider = new MutableStoreProvider() {
       @Override
       public SchedulerStore.Mutable getSchedulerStore() {
@@ -135,6 +130,11 @@ class DbStorage extends AbstractIdleService implements Storage {
       @Override
       public JobUpdateStore.Mutable getJobUpdateStore() {
         return jobUpdateStore;
+      }
+
+      @Override
+      public ReservationStore.Mutable getReservationStore() {
+        return reservationStore;
       }
 
       @Override

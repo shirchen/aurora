@@ -41,14 +41,7 @@ import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.scheduler.SchedulerServicesModule;
 import org.apache.aurora.scheduler.async.AsyncModule.AsyncExecutor;
 import org.apache.aurora.scheduler.async.GatedWorkQueue;
-import org.apache.aurora.scheduler.storage.AttributeStore;
-import org.apache.aurora.scheduler.storage.CronJobStore;
-import org.apache.aurora.scheduler.storage.JobUpdateStore;
-import org.apache.aurora.scheduler.storage.LockStore;
-import org.apache.aurora.scheduler.storage.QuotaStore;
-import org.apache.aurora.scheduler.storage.SchedulerStore;
-import org.apache.aurora.scheduler.storage.Storage;
-import org.apache.aurora.scheduler.storage.TaskStore;
+import org.apache.aurora.scheduler.storage.*;
 import org.apache.aurora.scheduler.storage.db.typehandlers.TypeHandlers;
 import org.apache.aurora.scheduler.storage.mem.InMemStoresModule;
 import org.apache.ibatis.migration.JavaMigrationLoader;
@@ -301,6 +294,7 @@ public final class DbModule extends PrivateModule {
     bindStore(QuotaStore.Mutable.class, DbQuotaStore.class);
     bindStore(SchedulerStore.Mutable.class, DbSchedulerStore.class);
     bindStore(JobUpdateStore.Mutable.class, DbJobUpdateStore.class);
+    bindStore(ReservationStore.Mutable.class, DbReservationStore.class);
 
     Key<Storage> storageKey = keyFactory.create(Storage.class);
     bind(storageKey).to(DbStorage.class);

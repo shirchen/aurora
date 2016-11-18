@@ -40,6 +40,7 @@ public interface Storage {
     QuotaStore getQuotaStore();
     AttributeStore getAttributeStore();
     JobUpdateStore getJobUpdateStore();
+    ReservationStore getReservationStore();
   }
 
   interface MutableStoreProvider extends StoreProvider {
@@ -65,6 +66,7 @@ public interface Storage {
     QuotaStore.Mutable getQuotaStore();
     AttributeStore.Mutable getAttributeStore();
     JobUpdateStore.Mutable getJobUpdateStore();
+    ReservationStore.Mutable getReservationStore();
 
     /**
      * Gets direct low level access to the underlying storage.

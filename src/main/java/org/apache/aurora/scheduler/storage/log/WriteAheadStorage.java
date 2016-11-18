@@ -38,14 +38,8 @@ import org.apache.aurora.gen.storage.SaveQuota;
 import org.apache.aurora.gen.storage.SaveTasks;
 import org.apache.aurora.scheduler.events.EventSink;
 import org.apache.aurora.scheduler.events.PubsubEvent;
-import org.apache.aurora.scheduler.storage.AttributeStore;
-import org.apache.aurora.scheduler.storage.CronJobStore;
-import org.apache.aurora.scheduler.storage.JobUpdateStore;
-import org.apache.aurora.scheduler.storage.LockStore;
-import org.apache.aurora.scheduler.storage.QuotaStore;
-import org.apache.aurora.scheduler.storage.SchedulerStore;
+import org.apache.aurora.scheduler.storage.*;
 import org.apache.aurora.scheduler.storage.Storage.MutableStoreProvider;
-import org.apache.aurora.scheduler.storage.TaskStore;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 import org.apache.aurora.scheduler.storage.entities.IJobConfiguration;
 import org.apache.aurora.scheduler.storage.entities.IJobInstanceUpdateEvent;
@@ -78,7 +72,8 @@ import static org.apache.aurora.scheduler.storage.log.LogStorage.TransactionMana
     LockStore.class,
     QuotaStore.class,
     AttributeStore.class,
-    JobUpdateStore.class})
+    JobUpdateStore.class,
+    ReservationStore.class})
 class WriteAheadStorage extends WriteAheadStorageForwarder implements
     MutableStoreProvider,
     SchedulerStore.Mutable,
@@ -87,7 +82,8 @@ class WriteAheadStorage extends WriteAheadStorageForwarder implements
     LockStore.Mutable,
     QuotaStore.Mutable,
     AttributeStore.Mutable,
-    JobUpdateStore.Mutable {
+    JobUpdateStore.Mutable,
+    ReservationStore.Mutable {
 
   private final TransactionManager transactionManager;
   private final SchedulerStore.Mutable schedulerStore;
@@ -97,6 +93,7 @@ class WriteAheadStorage extends WriteAheadStorageForwarder implements
   private final QuotaStore.Mutable quotaStore;
   private final AttributeStore.Mutable attributeStore;
   private final JobUpdateStore.Mutable jobUpdateStore;
+  private final ReservationStore.Mutable reservationStore;
   private final Logger log;
   private final EventSink eventSink;
 
@@ -121,6 +118,7 @@ class WriteAheadStorage extends WriteAheadStorageForwarder implements
       QuotaStore.Mutable quotaStore,
       AttributeStore.Mutable attributeStore,
       JobUpdateStore.Mutable jobUpdateStore,
+      ReservationStore.Mutable reservationStore,
       Logger log,
       EventSink eventSink) {
 
@@ -131,7 +129,8 @@ class WriteAheadStorage extends WriteAheadStorageForwarder implements
         lockStore,
         quotaStore,
         attributeStore,
-        jobUpdateStore);
+        jobUpdateStore,
+        reservationStore);
 
     this.transactionManager = requireNonNull(transactionManager);
     this.schedulerStore = requireNonNull(schedulerStore);
@@ -141,6 +140,7 @@ class WriteAheadStorage extends WriteAheadStorageForwarder implements
     this.quotaStore = requireNonNull(quotaStore);
     this.attributeStore = requireNonNull(attributeStore);
     this.jobUpdateStore = requireNonNull(jobUpdateStore);
+    this.reservationStore = requireNonNull(reservationStore);
     this.log = requireNonNull(log);
     this.eventSink = requireNonNull(eventSink);
   }
@@ -379,6 +379,11 @@ class WriteAheadStorage extends WriteAheadStorageForwarder implements
 
   @Override
   public JobUpdateStore.Mutable getJobUpdateStore() {
+    return this;
+  }
+
+  @Override
+  public ReservationStore.Mutable getReservationStore() {
     return this;
   }
 
