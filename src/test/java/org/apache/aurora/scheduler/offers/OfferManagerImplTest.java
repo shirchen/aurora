@@ -37,6 +37,7 @@ import org.apache.aurora.scheduler.events.PubsubEvent.HostAttributesChanged;
 import org.apache.aurora.scheduler.mesos.Driver;
 import org.apache.aurora.scheduler.mesos.MesosTaskFactory;
 import org.apache.aurora.scheduler.offers.OfferManager.OfferManagerImpl;
+import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
 import org.apache.aurora.scheduler.testing.FakeScheduledExecutor;
@@ -136,7 +137,7 @@ public class OfferManagerImplTest extends EasyMockTest {
     assertEquals(
         ImmutableSet.of(OFFER_B, offerA, offerC),
         ImmutableSet.copyOf(offerManager.getOffers()));
-    offerManager.launchTask(OFFER_B.getOffer().getId(), TASK_INFO);
+    offerManager.launchTask(OFFER_B.getOffer(), IAssignedTask.build(TASK.newBuilder().getAssignedTask()));
     clock.advance(RETURN_DELAY);
   }
 
@@ -273,7 +274,7 @@ public class OfferManagerImplTest extends EasyMockTest {
     offerManager.addOffer(OFFER_A);
 
     try {
-      offerManager.launchTask(OFFER_A_ID, TASK_INFO);
+      offerManager.launchTask(OFFER_A.getOffer(), IAssignedTask.build(TASK.newBuilder().getAssignedTask()));
     } finally {
       clock.advance(RETURN_DELAY);
     }
@@ -282,7 +283,7 @@ public class OfferManagerImplTest extends EasyMockTest {
   @Test(expected = OfferManager.LaunchException.class)
   public void testLaunchTaskOfferRaceThrows() throws OfferManager.LaunchException {
     control.replay();
-    offerManager.launchTask(OFFER_A_ID, TASK_INFO);
+    offerManager.launchTask(OFFER_A.getOffer(), IAssignedTask.build(TASK.newBuilder().getAssignedTask()));
   }
 
   @Test

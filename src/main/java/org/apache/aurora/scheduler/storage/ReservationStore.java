@@ -14,6 +14,7 @@
 package org.apache.aurora.scheduler.storage;
 
 import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Point of storage for tasks that have to be dynamically reserved.
@@ -25,7 +26,7 @@ public interface ReservationStore {
    *
    * @return All reserved tasks.
    */
-  HashSet<String> fetchReservedTasks();
+  Set<String> fetchReservedTasks();
 
   interface Mutable extends ReservationStore {
     /**
@@ -41,5 +42,11 @@ public interface ReservationStore {
      * @param taskId taskId to remove as one no longer needing to wait for a dynamic reservation.
      */
     void removeTaskId(String taskId);
+
+
+    /**
+     * Removes all taskIds from the ReservationStore.
+     */
+    void deleteReservedTasks();
   }
 }

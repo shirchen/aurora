@@ -20,22 +20,7 @@ import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 
-import org.apache.aurora.gen.storage.Op;
-import org.apache.aurora.gen.storage.PruneJobUpdateHistory;
-import org.apache.aurora.gen.storage.RemoveJob;
-import org.apache.aurora.gen.storage.RemoveLock;
-import org.apache.aurora.gen.storage.RemoveQuota;
-import org.apache.aurora.gen.storage.RemoveTasks;
-import org.apache.aurora.gen.storage.RewriteTask;
-import org.apache.aurora.gen.storage.SaveCronJob;
-import org.apache.aurora.gen.storage.SaveFrameworkId;
-import org.apache.aurora.gen.storage.SaveHostAttributes;
-import org.apache.aurora.gen.storage.SaveJobInstanceUpdateEvent;
-import org.apache.aurora.gen.storage.SaveJobUpdate;
-import org.apache.aurora.gen.storage.SaveJobUpdateEvent;
-import org.apache.aurora.gen.storage.SaveLock;
-import org.apache.aurora.gen.storage.SaveQuota;
-import org.apache.aurora.gen.storage.SaveTasks;
+import org.apache.aurora.gen.storage.*;
 import org.apache.aurora.scheduler.events.EventSink;
 import org.apache.aurora.scheduler.events.PubsubEvent;
 import org.apache.aurora.scheduler.storage.*;
@@ -83,7 +68,8 @@ class WriteAheadStorage extends WriteAheadStorageForwarder implements
     QuotaStore.Mutable,
     AttributeStore.Mutable,
     JobUpdateStore.Mutable,
-    ReservationStore.Mutable {
+    ReservationStore.Mutable
+{
 
   private final TransactionManager transactionManager;
   private final SchedulerStore.Mutable schedulerStore;
@@ -150,6 +136,23 @@ class WriteAheadStorage extends WriteAheadStorageForwarder implements
         transactionManager.hasActiveTransaction(),
         "Mutating operations must be within a transaction.");
     transactionManager.log(op);
+  }
+
+
+  @Override
+  public void removeTaskId(String taskId) {
+    requireNonNull(taskId);
+    write(Op.removeTaskId(new RemoveTaskId(taskId)));
+
+    reservationStore.removeTaskId(taskId);
+  }
+
+  @Override
+  public void saveReserervedTasks(String taskId) {
+    requireNonNull(taskId);
+    write(Op.saveReserervedTasks(new SaveReserervedTasks(taskId)));
+
+    reservationStore.saveReserervedTasks(taskId);
   }
 
   @Override
@@ -306,16 +309,6 @@ class WriteAheadStorage extends WriteAheadStorageForwarder implements
     return prunedUpdates;
   }
 
-  @Override
-  public void removeTaskId(String foo) {
-  }
-
-  @Override
-  public void saveReserervedTasks(String foo) {
-
-  }
-
-
 
   @Override
   public void deleteAllTasks() {
@@ -337,6 +330,12 @@ class WriteAheadStorage extends WriteAheadStorageForwarder implements
 
   @Override
   public void deleteQuotas() {
+    throw new UnsupportedOperationException(
+        "Unsupported since casual storage users should never be doing this.");
+  }
+
+  @Override
+  public void deleteReservedTasks() {
     throw new UnsupportedOperationException(
         "Unsupported since casual storage users should never be doing this.");
   }

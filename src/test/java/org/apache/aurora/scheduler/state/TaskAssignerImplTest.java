@@ -149,7 +149,7 @@ public class TaskAssignerImplTest extends EasyMockTest {
   @Test
   public void testAssignPartialNoVetoes() throws Exception {
     expect(offerManager.getOffers(GROUP_KEY)).andReturn(ImmutableSet.of(OFFER));
-    offerManager.launchTask(MESOS_OFFER.getId(), TASK_INFO);
+    offerManager.launchTask(MESOS_OFFER, IAssignedTask.build(TASK.newBuilder().getAssignedTask()));
     expect(tierManager.getTier(TASK.getAssignedTask().getTask())).andReturn(DEV_TIER);
     expect(filter.filter(UNUSED, resourceRequest)).andReturn(ImmutableSet.of());
     expectAssignTask(MESOS_OFFER);
@@ -212,7 +212,7 @@ public class TaskAssignerImplTest extends EasyMockTest {
   @Test
   public void testAssignmentClearedOnError() throws Exception {
     expect(offerManager.getOffers(GROUP_KEY)).andReturn(ImmutableSet.of(OFFER, OFFER_2));
-    offerManager.launchTask(MESOS_OFFER.getId(), TASK_INFO);
+    offerManager.launchTask(MESOS_OFFER, IAssignedTask.build(TASK.newBuilder().getAssignedTask()));
     expectLastCall().andThrow(new OfferManager.LaunchException("expected"));
     expect(tierManager.getTier(TASK.getAssignedTask().getTask())).andReturn(DEV_TIER);
     expect(filter.filter(UNUSED, resourceRequest)).andReturn(ImmutableSet.of());
@@ -273,7 +273,7 @@ public class TaskAssignerImplTest extends EasyMockTest {
     expectAssignTask(OFFER_2.getOffer());
     expect(taskFactory.createFrom(TASK.getAssignedTask(), OFFER_2.getOffer()))
         .andReturn(TASK_INFO);
-    offerManager.launchTask(OFFER_2.getOffer().getId(), TASK_INFO);
+    offerManager.launchTask(OFFER_2.getOffer(), IAssignedTask.build(TASK.newBuilder().getAssignedTask()));
 
     control.replay();
 

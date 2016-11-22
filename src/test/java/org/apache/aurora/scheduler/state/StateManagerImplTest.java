@@ -97,6 +97,7 @@ public class StateManagerImplTest extends EasyMockTest {
   private static final ITaskConfig SERVICE_CONFIG = setIsService(NON_SERVICE_CONFIG, true);
 
   private Driver driver;
+  private KillManager killManager;
   private TaskIdGenerator taskIdGenerator;
   private EventSink eventSink;
   private RescheduleCalculator rescheduleCalculator;
@@ -115,6 +116,7 @@ public class StateManagerImplTest extends EasyMockTest {
     stateManager = new StateManagerImpl(
         clock,
         driver,
+        killManager,
         taskIdGenerator,
         eventSink,
         rescheduleCalculator);

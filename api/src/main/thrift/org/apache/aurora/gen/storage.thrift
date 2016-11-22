@@ -24,6 +24,18 @@ struct SaveFrameworkId {
   1: string id
 }
 
+struct SaveReserervedTasks {
+   1: string taskId
+}
+
+struct RemoveTaskId {
+   1: string taskId
+}
+
+struct DeleteReservedTasks {
+    1: set<string> taskIds
+}
+
 struct SaveCronJob {
   2: api.JobConfiguration jobConfig
 }
@@ -108,6 +120,9 @@ union Op {
   15: SaveJobUpdateEvent saveJobUpdateEvent
   16: SaveJobInstanceUpdateEvent saveJobInstanceUpdateEvent
   17: PruneJobUpdateHistory pruneJobUpdateHistory
+  18: SaveReserervedTasks saveReserervedTasks
+  19: RemoveTaskId removeTaskId
+  20: DeleteReservedTasks deleteReservedTasks
 }
 
 // The current schema version ID.  This should be incremented each time the
@@ -152,6 +167,7 @@ struct Snapshot {
   11: list<string> dbScript
   // Indicates if experimental DB store for tasks and cron jobs was enabled when snapshot was cut.
   12: bool experimentalTaskStore
+  13: set<string> reservedTasks
 }
 
 // A message header that calls out the number of expected FrameChunks to follow to form a complete

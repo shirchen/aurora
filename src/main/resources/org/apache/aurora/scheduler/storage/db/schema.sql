@@ -22,6 +22,13 @@ CREATE TABLE framework_id(
   UNIQUE(framework_id)
 );
 
+CREATE TABLE reserved_tasks(
+  id IDENTITY,
+  task_id VARCHAR NOT NULL,
+
+  UNIQUE(task_id)
+);
+
 CREATE TABLE job_keys(
   id IDENTITY,
   role VARCHAR NOT NULL,
