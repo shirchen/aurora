@@ -39,6 +39,7 @@ import org.apache.aurora.scheduler.mesos.MesosTaskFactory;
 import org.apache.aurora.scheduler.offers.OfferManager;
 import org.apache.aurora.scheduler.resources.ResourceBag;
 import org.apache.aurora.scheduler.state.TaskAssigner.TaskAssignerImpl;
+import org.apache.aurora.scheduler.storage.ReservationStore;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
@@ -121,6 +122,7 @@ public class TaskAssignerImplTest extends EasyMockTest {
   private OfferManager offerManager;
   private TaskAssignerImpl assigner;
   private TierManager tierManager;
+  private ReservationStore reservationStore;
 
   @Before
   public void setUp() throws Exception {
@@ -130,6 +132,7 @@ public class TaskAssignerImplTest extends EasyMockTest {
     stateManager = createMock(StateManager.class);
     offerManager = createMock(OfferManager.class);
     tierManager = createMock(TierManager.class);
+    reservationStore = createMock(ReservationStore.class);
     assigner = new TaskAssignerImpl(stateManager, filter, taskFactory, offerManager, tierManager);
     resourceRequest = new ResourceRequest(
         TASK.getAssignedTask().getTask(),

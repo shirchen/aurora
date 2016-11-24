@@ -104,6 +104,7 @@ public final class DbModule extends PrivateModule {
       .add(LockMapper.class)
       .add(MigrationMapper.class)
       .add(QuotaMapper.class)
+      .add(ReservedTasksMapper.class)
       .add(TaskConfigMapper.class)
       .add(TaskMapper.class)
       .build();
@@ -283,11 +284,13 @@ public final class DbModule extends PrivateModule {
         expose(TaskMapper.class);
         expose(TaskConfigManager.class);
         expose(JobKeyMapper.class);
+//     q   expose(ReservedTasksMapper.class);
       }
     });
     install(taskStoresModule);
     expose(keyFactory.create(CronJobStore.Mutable.class));
     expose(keyFactory.create(TaskStore.Mutable.class));
+//    expose(keyFactory.create(ReservationStore.Mutable.class));
 
     bindStore(AttributeStore.Mutable.class, DbAttributeStore.class);
     bindStore(LockStore.Mutable.class, DbLockStore.class);
@@ -306,6 +309,7 @@ public final class DbModule extends PrivateModule {
     expose(TaskMapper.class);
     expose(TaskConfigMapper.class);
     expose(JobKeyMapper.class);
+//    expose(ReservedTasksMapper.class);
   }
 
   /**

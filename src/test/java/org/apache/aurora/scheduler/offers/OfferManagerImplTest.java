@@ -37,6 +37,7 @@ import org.apache.aurora.scheduler.events.PubsubEvent.HostAttributesChanged;
 import org.apache.aurora.scheduler.mesos.Driver;
 import org.apache.aurora.scheduler.mesos.MesosTaskFactory;
 import org.apache.aurora.scheduler.offers.OfferManager.OfferManagerImpl;
+import org.apache.aurora.scheduler.storage.ReservationStore;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
@@ -101,6 +102,7 @@ public class OfferManagerImplTest extends EasyMockTest {
   private FakeScheduledExecutor clock;
   private OfferManagerImpl offerManager;
   MesosTaskFactory taskFactory;
+  private ReservationStore.Mutable reservationStore;
   private EventSink eventSink;
 
   @Before
@@ -109,12 +111,13 @@ public class OfferManagerImplTest extends EasyMockTest {
     DelayExecutor executorMock = createMock(DelayExecutor.class);
     clock = FakeScheduledExecutor.fromDelayExecutor(executorMock);
     eventSink = createMock(EventSink.class);
+    reservationStore = createMock(ReservationStore.Mutable.class);
     addTearDown(clock::assertEmpty);
     OfferSettings offerSettings = new OfferSettings(
         Amount.of(OFFER_FILTER_SECONDS, Time.SECONDS),
         () -> RETURN_DELAY);
     StatsProvider stats = new FakeStatsProvider();
-    offerManager = new OfferManagerImpl(driver, offerSettings, stats, taskFactory, executorMock, eventSink);
+    offerManager = new OfferManagerImpl(driver, offerSettings, stats, taskFactory, executorMock, reservationStore, eventSink);
   }
 
   @Test

@@ -47,6 +47,8 @@ import org.apache.aurora.scheduler.events.PubsubEvent.DriverDisconnected;
 import org.apache.aurora.scheduler.events.PubsubEvent.EventSubscriber;
 import org.apache.aurora.scheduler.mesos.Driver;
 import org.apache.aurora.scheduler.mesos.MesosTaskFactory;
+import org.apache.aurora.scheduler.storage.ReservationStore;
+import org.apache.aurora.scheduler.storage.Storage;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 import org.apache.mesos.Protos;
@@ -82,10 +84,10 @@ public interface OfferManager extends EventSubscriber {
    */
   void reserveAndLaunchTask(HostOffer offer, IAssignedTask task);
 
-  void removeTaskId(String taskId);
+//  void removeTaskId(String taskId);
 
 
-  HashSet<String> getReservedTasks();
+//  HashSet<String> getReservedTasks();
 
 
   /**
@@ -181,7 +183,9 @@ public interface OfferManager extends EventSubscriber {
     private final StatsProvider statsProvider;
     private final MesosTaskFactory taskFactory;
     private final EventSink eventSink;
-    public HashSet<String> reservedTasks;
+    private final Storage storage;
+//    private final ReservationStore.Mutable reservationStore;
+//    public HashSet<String> reservedTasks;
 
     @Inject
     @VisibleForTesting
@@ -191,6 +195,8 @@ public interface OfferManager extends EventSubscriber {
         StatsProvider statsProvider,
         MesosTaskFactory taskFactory,
         @AsyncExecutor DelayExecutor executor,
+        Storage storage,
+//        ReservationStore.Mutable reservationStore,
         EventSink eventSink) {
 
       this.driver = requireNonNull(driver);
@@ -199,17 +205,19 @@ public interface OfferManager extends EventSubscriber {
       this.statsProvider = requireNonNull(statsProvider);
       this.taskFactory = requireNonNull(taskFactory);
       this.hostOffers = new HostOffers(statsProvider);
+      this.storage = storage;
       this.eventSink = requireNonNull(eventSink);
-      this.reservedTasks = new HashSet<String>();
+//      this.reservationStore = requireNonNull(reservationStore);
+//      this.reservedTasks = new HashSet<String>();
     }
 
-    public HashSet<String> getReservedTasks() {
-      return this.reservedTasks;
-    }
+//    public HashSet<String> getReservedTasks() {
+//      return this.reservedTasks;
+//    }
 
-    public void removeTaskId(String taskId) {
-      this.reservedTasks.remove(taskId);
-    }
+//    public void removeTaskId(String taskId) {
+//      this.reservedTasks.remove(taskId);
+//    }
 
     @Override
     public void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList) {
@@ -224,7 +232,7 @@ public interface OfferManager extends EventSubscriber {
 
     @Override
     public void reserveAndLaunchTask(HostOffer offer, IAssignedTask iAssignedTask) {
-      // This will sort our resoruces in the correct order and try to use the ones that have been reserved first.
+      // This will sort our resources in the correct order and try to use the ones that have been reserved first.
       Protos.TaskInfo task = taskFactory.createFrom(iAssignedTask, offer.getOffer());
       OfferID offerId = offer.getOffer().getId();
       LOG.info("Task name is " + task.getName());
@@ -264,7 +272,11 @@ public interface OfferManager extends EventSubscriber {
               .addTaskInfos(newTask))
           .build();
 
-      this.reservedTasks.add(taskNameInstanceId);
+        storage.write(
+            (Storage.MutateWork.NoResult.Quiet) storeProvider ->
+              storeProvider.getReservationStore().saveReserervedTasks(taskNameInstanceId));
+//      reservationStore.saveReserervedTasks(taskNameInstanceId);
+//      this.reservedTasks.add(taskNameInstanceId);
 
       List<Operation> operations = Arrays.asList(reserve, launch);
       LOG.info("Finished building operation");

@@ -44,6 +44,7 @@ import org.apache.aurora.scheduler.mesos.MesosTaskFactory;
 import org.apache.aurora.scheduler.offers.OfferManager;
 import org.apache.aurora.scheduler.resources.ResourceManager;
 import org.apache.aurora.scheduler.resources.ResourceType;
+import org.apache.aurora.scheduler.storage.Storage;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
 import org.apache.mesos.Protos;
@@ -93,6 +94,8 @@ public interface TaskAssigner {
     private final MesosTaskFactory taskFactory;
     private final OfferManager offerManager;
     private final TierManager tierManager;
+    private final Storage storage;
+//    private final ReservationStore reservationStore;
     private final Map<String, Integer> taskIdTostart = Maps.newHashMap();
 
     @Inject
@@ -101,13 +104,18 @@ public interface TaskAssigner {
         SchedulingFilter filter,
         MesosTaskFactory taskFactory,
         OfferManager offerManager,
-        TierManager tierManager) {
+        TierManager tierManager,
+        Storage storage
+//        ReservationStore reservationStore
+    ) {
 
       this.stateManager = requireNonNull(stateManager);
       this.filter = requireNonNull(filter);
       this.taskFactory = requireNonNull(taskFactory);
       this.offerManager = requireNonNull(offerManager);
       this.tierManager = requireNonNull(tierManager);
+      this.storage = requireNonNull(storage);
+//      this.reservationStore = requireNonNull(reservationStore);
     }
 
     @VisibleForTesting
@@ -220,9 +228,11 @@ public interface TaskAssigner {
           LOG.info("looking at task " + taskName3);
 
           // TODO: Maybe persist inside memory or add a new store.
-          LOG.info("State of reserved tasks " + offerManager.getReservedTasks().toString());
+//          LOG.info("State of reserved tasks " + offerManager.getReservedTasks().toString());
 
-          if (offerManager.getReservedTasks().contains(taskName3)) {
+          LOG.info("State of reserved tasks " + storeProvider.getReservationStore().fetchReservedTasks());
+
+          if (storeProvider.getReservationStore().fetchReservedTasks().contains(taskName3)) {
             LOG.info("Found task inside reserved list so it must be dynamically reserved " + taskName3);
             long timeMillis = System.currentTimeMillis();
             long timeSeconds = TimeUnit.MILLISECONDS.toSeconds(timeMillis);

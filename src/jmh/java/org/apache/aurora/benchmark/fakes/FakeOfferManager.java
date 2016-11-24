@@ -73,16 +73,6 @@ public class FakeOfferManager implements OfferManager {
   }
 
   @Override
-  public void removeTaskId(String taskId) {
-
-  }
-
-  @Override
-  public HashSet<String> getReservedTasks() {
-    return new HashSet<>();
-  }
-
-  @Override
   public void launchTask(Offer offer, IAssignedTask task) throws LaunchException {
 
   }

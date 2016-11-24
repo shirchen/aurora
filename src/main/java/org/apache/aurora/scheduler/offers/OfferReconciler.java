@@ -7,6 +7,7 @@ import com.google.common.eventbus.Subscribe;
 import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.base.*;
 import org.apache.aurora.scheduler.events.PubsubEvent;
+import org.apache.aurora.scheduler.storage.ReservationStore;
 import org.apache.aurora.scheduler.storage.Storage;
 import org.apache.aurora.scheduler.storage.entities.IJobKey;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
@@ -26,15 +27,18 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
   private static final Logger LOG = LoggerFactory.getLogger(OfferReconciler.class);
 
   private final OfferManager offerManager;
+//  private final ReservationStore reservationStore;
   private final Storage storage;
 
   @Inject
   @VisibleForTesting
   public OfferReconciler(
       OfferManager offerManager,
+//      ReservationStore reservationStore,
       Storage storage)
   {
     this.offerManager = offerManager;
+//    this.reservationStore = reservationStore;
     this.storage = storage;
   }
 
@@ -48,7 +52,13 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
     //TODO: we should only unreserve resource that we reserved, not the entire offer. Is this true?
     boolean unreserve = false;
 
-    LOG.info("Inside offerAdded callback with state of: " + offerManager.getReservedTasks().toString());
+
+
+//    LOG.info("Inside offerAdded callback with state of: " + offerManager.getReservedTasks().toString());
+
+
+    //TODO: put back
+    LOG.info("Inside offerAdded callback with state of: " + storage.read(storeProvider -> storeProvider.getReservationStore().fetchReservedTasks()));
 
     String task_name = "";
     // How do we know that this is our our offer?

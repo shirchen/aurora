@@ -397,6 +397,12 @@ public class LogStorage implements NonVolatileStorage, DistributedSnapshotStore 
               IJobUpdateKey.build(event.getKey()),
               IJobInstanceUpdateEvent.build(op.getSaveJobInstanceUpdateEvent().getEvent()));
         })
+        .put(Op._Fields.DELETE_RESERVED_TASKS,
+            op -> writeBehindReservationStore.deleteReservedTasks())
+        .put(Op._Fields.REMOVE_TASK_ID,
+            op -> writeBehindReservationStore.removeTaskId(op.getRemoveTaskId().getTaskId()))
+        .put(Op._Fields.SAVE_RESERERVED_TASKS,
+            op -> writeBehindReservationStore.saveReserervedTasks(op.getSaveReserervedTasks().getTaskId()))
         .put(Op._Fields.PRUNE_JOB_UPDATE_HISTORY, op -> writeBehindJobUpdateStore.pruneHistory(
             op.getPruneJobUpdateHistory().getPerJobRetainCount(),
             op.getPruneJobUpdateHistory().getHistoryPruneThresholdMs())).build();
