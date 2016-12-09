@@ -18,7 +18,7 @@
 <mapper namespace="org.apache.aurora.scheduler.storage.db.ReservedTasksMapper">
     <!--<insert id="insert" useGeneratedKeys="true" keyColumn="id" keyProperty="result.id">-->
     <insert id="insert">
-        INSERT INTO reserved_tasks (
+        MERGE INTO reserved_tasks (
         task_id
         ) VALUES (
         #{taskId},
