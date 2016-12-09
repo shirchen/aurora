@@ -27,8 +27,8 @@ import com.google.common.net.HostAndPort;
 
 import org.apache.aurora.common.thrift.Endpoint;
 import org.apache.aurora.common.thrift.ServiceInstance;
-import org.apache.aurora.scheduler.discovery.ServiceGroupMonitor;
-import org.apache.aurora.scheduler.discovery.ServiceGroupMonitor.MonitorException;
+import org.apache.aurora.scheduler.app.ServiceGroupMonitor;
+import org.apache.aurora.scheduler.app.ServiceGroupMonitor.MonitorException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -194,10 +194,10 @@ class LeaderRedirect implements Closeable {
         LOG.warn("No serviceGroupMonitor in host set, will not redirect despite not being leader.");
         return Optional.absent();
       case 1:
-        LOG.debug("Found leader scheduler at " + hostSet);
+        LOG.debug("Found leader scheduler at {}", hostSet);
         return Optional.of(Iterables.getOnlyElement(hostSet));
       default:
-        LOG.error("Multiple serviceGroupMonitor detected, will not redirect: " + hostSet);
+        LOG.error("Multiple serviceGroupMonitor detected, will not redirect: {}", hostSet);
         return Optional.absent();
     }
   }

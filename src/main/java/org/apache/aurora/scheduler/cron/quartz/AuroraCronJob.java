@@ -154,9 +154,9 @@ class AuroraCronJob implements Job, EventSubscriber {
       if (killFollowups.contains(key)) {
         context.getJobDetail().getJobDataMap().remove(path);
         killFollowups.remove(key);
-        LOG.info("Resetting job context for cron " + path);
+        LOG.info("Resetting job context for cron {}", path);
       } else {
-        LOG.info("Ignoring trigger as another concurrent run is active for cron " + path);
+        LOG.info("Ignoring trigger as another concurrent run is active for cron {}", path);
         return;
       }
     }
@@ -173,7 +173,7 @@ class AuroraCronJob implements Job, EventSubscriber {
       try {
         cronJob = SanitizedCronJob.fromUnsanitized(configurationManager, config.get());
       } catch (ConfigurationManager.TaskDescriptionException | CronException e) {
-        LOG.warn("Invalid cron job for {} in storage - failed to parse with {}", key, e);
+        LOG.warn("Invalid cron job for {} in storage - failed to parse", key, e);
         CRON_JOB_PARSE_FAILURES.incrementAndGet();
         return BatchWorker.NO_RESULT;
       }

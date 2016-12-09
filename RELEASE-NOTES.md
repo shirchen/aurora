@@ -20,12 +20,15 @@
   can now rely purely on health checks rather than `watch_secs` timeout when deciding an individial
   instance update state, by setting `watch_secs` to 0. A service will remain in `STARTING` state
   util `min_consecutive_successes` consecutive health checks have passed.
+- The default logging output has been changed to remove line numbers and inner class information in
+  exchange for faster logging.
 
 ### Deprecations and removals:
 
 - The scheduler flag `-zk_use_curator` has been removed. If you have never set the flag and are
   upgrading you should take care as described in the [note](#zk_use_curator_upgrade) below.
 
+=======
 0.16.0
 ======
 
