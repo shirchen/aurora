@@ -29,14 +29,18 @@ public final class TierInfo {
 
   private final boolean preemptible;
   private final boolean revocable;
+  private final boolean reserved;
 
   @JsonCreator
   public TierInfo(
       @JsonProperty("preemptible") boolean preemptible,
-      @JsonProperty("revocable") boolean revocable) {
+      @JsonProperty("revocable") boolean revocable,
+      @JsonProperty("reserved") boolean reserved
+  ) {
 
     this.preemptible = preemptible;
     this.revocable = revocable;
+    this.reserved = reserved;
   }
 
   /**
@@ -58,6 +62,11 @@ public final class TierInfo {
     return revocable;
   }
 
+
+  public boolean isReserved() {
+    return reserved;
+  }
+
   /**
    * Gets the map of tier attribute names to values.
    *
@@ -66,13 +75,14 @@ public final class TierInfo {
   public Map<String, String> toMap() {
     return ImmutableMap.of(
         "preemptible", String.valueOf(preemptible),
-        "revocable", String.valueOf(revocable)
+        "revocable", String.valueOf(revocable),
+        "reserved", String.valueOf(reserved)
     );
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(preemptible, revocable);
+    return Objects.hash(preemptible, revocable, reserved);
   }
 
   @Override
@@ -83,7 +93,8 @@ public final class TierInfo {
 
     TierInfo other = (TierInfo) obj;
     return Objects.equals(preemptible, other.preemptible)
-        && Objects.equals(revocable, other.revocable);
+        && Objects.equals(revocable, other.revocable)
+        && Objects.equals(reserved, other.reserved);
   }
 
   @Override
@@ -91,6 +102,7 @@ public final class TierInfo {
     return MoreObjects.toStringHelper(this)
         .add("preemptible", preemptible)
         .add("revocable", revocable)
+        .add("reserved", reserved)
         .toString();
   }
 }
