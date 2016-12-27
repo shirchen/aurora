@@ -366,6 +366,7 @@ public final class Query {
     /**
      * A convenience method to scope this builder to all active states minus RUNNING. Used to see
      * if an offer can be unreserved.
+     *
      * @return A new Builder scoped to Tasks#ACTIVE_STATES excluding RUNNING.
      */
     public Builder activeNotRunning() {
