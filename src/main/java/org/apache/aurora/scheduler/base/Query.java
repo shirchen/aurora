@@ -13,6 +13,7 @@
  */
 package org.apache.aurora.scheduler.base;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.Objects;
 
@@ -360,6 +361,21 @@ public final class Query {
      */
     public Builder active() {
       return byStatus(Tasks.ACTIVE_STATES);
+    }
+
+    /**
+     * A convenience method to scope this builder to all active states minus RUNNING. Used to see
+     * if an offer can be unreserved.
+     * @return A new Builder scoped to Tasks#ACTIVE_STATES excluding RUNNING.
+     */
+    public Builder activeNotRunning() {
+      ArrayList<ScheduleStatus> filteredStatus = new ArrayList<>();
+      for (ScheduleStatus ss : Tasks.ACTIVE_STATES) {
+        if (ss != ScheduleStatus.RUNNING) {
+          filteredStatus.add(ss);
+        }
+      }
+      return byStatus(filteredStatus);
     }
 
     /**
