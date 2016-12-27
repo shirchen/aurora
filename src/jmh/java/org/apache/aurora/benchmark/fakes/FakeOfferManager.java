@@ -21,6 +21,8 @@ import org.apache.aurora.scheduler.events.PubsubEvent;
 import org.apache.aurora.scheduler.offers.OfferManager;
 import org.apache.mesos.Protos;
 
+import java.util.List;
+
 public class FakeOfferManager implements OfferManager {
   @Override
   public void addOffer(HostOffer offer) {
@@ -60,5 +62,9 @@ public class FakeOfferManager implements OfferManager {
   @Override
   public Optional<HostOffer> getOffer(Protos.SlaveID slaveId) {
     return Optional.absent();
+  }
+
+  public void unReserveOffer(Protos.OfferID offerId, List<Protos.Resource> reservedResourceList) {
+    //no-op
   }
 }

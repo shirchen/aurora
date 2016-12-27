@@ -30,6 +30,8 @@ import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.async.DelayExecutor;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
 import org.apache.aurora.scheduler.base.Tasks;
+import org.apache.aurora.scheduler.events.EventSink;
+import org.apache.aurora.scheduler.events.PubsubEvent;
 import org.apache.aurora.scheduler.events.PubsubEvent.DriverDisconnected;
 import org.apache.aurora.scheduler.events.PubsubEvent.HostAttributesChanged;
 import org.apache.aurora.scheduler.mesos.Driver;
@@ -50,7 +52,9 @@ import static org.apache.aurora.gen.MaintenanceMode.NONE;
 import static org.apache.aurora.scheduler.base.TaskTestUtil.JOB;
 import static org.apache.aurora.scheduler.base.TaskTestUtil.makeTask;
 import static org.apache.aurora.scheduler.resources.ResourceTestUtil.mesosRange;
+import static org.apache.aurora.scheduler.resources.ResourceTestUtil.mesosScalar;
 import static org.apache.aurora.scheduler.resources.ResourceTestUtil.offer;
+import static org.apache.aurora.scheduler.resources.ResourceType.CPUS;
 import static org.apache.aurora.scheduler.resources.ResourceType.PORTS;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.junit.Assert.assertEquals;
@@ -96,6 +100,7 @@ public class OfferManagerImplTest extends EasyMockTest {
   private Driver driver;
   private FakeScheduledExecutor clock;
   private OfferManagerImpl offerManager;
+  private EventSink eventSink;
 
   @Before
   public void setUp() {
@@ -107,7 +112,8 @@ public class OfferManagerImplTest extends EasyMockTest {
         Amount.of(OFFER_FILTER_SECONDS, Time.SECONDS),
         () -> RETURN_DELAY);
     StatsProvider stats = new FakeStatsProvider();
-    offerManager = new OfferManagerImpl(driver, offerSettings, stats, executorMock);
+    eventSink = createMock(EventSink.class);
+    offerManager = new OfferManagerImpl(driver, offerSettings, stats, eventSink, executorMock);
   }
 
   @Test
@@ -116,6 +122,10 @@ public class OfferManagerImplTest extends EasyMockTest {
 
     HostOffer offerA = setMode(OFFER_A, DRAINING);
     HostOffer offerC = setMode(OFFER_C, DRAINING);
+
+    eventSink.post(new PubsubEvent.OfferAdded(offerA));
+    eventSink.post(new PubsubEvent.OfferAdded(OFFER_B));
+    eventSink.post(new PubsubEvent.OfferAdded(offerC));
 
     driver.acceptOffers(OFFER_B.getOffer().getId(), OPERATIONS, OFFER_FILTER);
 
@@ -136,6 +146,8 @@ public class OfferManagerImplTest extends EasyMockTest {
 
   @Test
   public void hostAttributeChangeUpdatesOfferSorting() throws Exception {
+    eventSink.post(new PubsubEvent.OfferAdded(OFFER_A));
+    eventSink.post(new PubsubEvent.OfferAdded(OFFER_B));
     driver.declineOffer(OFFER_A_ID, OFFER_FILTER);
     driver.declineOffer(OFFER_B.getOffer().getId(), OFFER_FILTER);
 
@@ -162,6 +174,8 @@ public class OfferManagerImplTest extends EasyMockTest {
 
   @Test
   public void testAddSameSlaveOffer() {
+    eventSink.post(new PubsubEvent.OfferAdded(OFFER_A));
+    expectLastCall();
     driver.declineOffer(OFFER_A_ID, OFFER_FILTER);
     expectLastCall().times(2);
 
@@ -175,6 +189,8 @@ public class OfferManagerImplTest extends EasyMockTest {
 
   @Test
   public void testGetOffersReturnsAllOffers() throws Exception {
+    eventSink.post(new PubsubEvent.OfferAdded(OFFER_A));
+    expectLastCall();
     control.replay();
 
     offerManager.addOffer(OFFER_A);
@@ -188,6 +204,8 @@ public class OfferManagerImplTest extends EasyMockTest {
 
   @Test
   public void testOfferFilteringDueToStaticBan() throws Exception {
+    eventSink.post(new PubsubEvent.OfferAdded(OFFER_A));
+    expectLastCall();
     driver.declineOffer(OFFER_A_ID, OFFER_FILTER);
 
     control.replay();
@@ -209,6 +227,8 @@ public class OfferManagerImplTest extends EasyMockTest {
 
   @Test
   public void testStaticBanIsClearedOnOfferReturn() throws Exception {
+    eventSink.post(new PubsubEvent.OfferAdded(OFFER_A));
+    expectLastCall().times(2);
     driver.declineOffer(OFFER_A_ID, OFFER_FILTER);
     expectLastCall().times(2);
 
@@ -229,6 +249,8 @@ public class OfferManagerImplTest extends EasyMockTest {
 
   @Test
   public void testStaticBanIsClearedOnDriverDisconnect() throws Exception {
+    eventSink.post(new PubsubEvent.OfferAdded(OFFER_A));
+    expectLastCall().times(2);
     driver.declineOffer(OFFER_A_ID, OFFER_FILTER);
 
     control.replay();
@@ -248,6 +270,7 @@ public class OfferManagerImplTest extends EasyMockTest {
 
   @Test
   public void getOffer() {
+    eventSink.post(new PubsubEvent.OfferAdded(OFFER_A));
     driver.declineOffer(OFFER_A_ID, OFFER_FILTER);
 
     control.replay();
@@ -259,6 +282,7 @@ public class OfferManagerImplTest extends EasyMockTest {
 
   @Test(expected = OfferManager.LaunchException.class)
   public void testAcceptOffersDriverThrows() throws OfferManager.LaunchException {
+    eventSink.post(new PubsubEvent.OfferAdded(OFFER_A));
     driver.acceptOffers(OFFER_A_ID, OPERATIONS, OFFER_FILTER);
     expectLastCall().andThrow(new IllegalStateException());
 
@@ -281,6 +305,8 @@ public class OfferManagerImplTest extends EasyMockTest {
 
   @Test
   public void testFlushOffers() throws Exception {
+    eventSink.post(new PubsubEvent.OfferAdded(OFFER_A));
+    eventSink.post(new PubsubEvent.OfferAdded(OFFER_B));
     control.replay();
 
     offerManager.addOffer(OFFER_A);
@@ -291,6 +317,8 @@ public class OfferManagerImplTest extends EasyMockTest {
 
   @Test
   public void testDeclineOffer() throws Exception {
+    eventSink.post(new PubsubEvent.OfferAdded(OFFER_A));
+    expectLastCall();
     driver.declineOffer(OFFER_A.getOffer().getId(), OFFER_FILTER);
 
     control.replay();
@@ -299,9 +327,25 @@ public class OfferManagerImplTest extends EasyMockTest {
     clock.advance(RETURN_DELAY);
   }
 
+  @Test
+  public void testUnreserveOffer() {
+    List<Protos.Resource> resourceList = ImmutableList.<Protos.Resource>builder()
+        .add(mesosScalar(CPUS, 31.9999999))
+        .build();
+
+    Operation unreserve = Operation.newBuilder()
+        .setType(Operation.Type.UNRESERVE)
+        .setUnreserve(
+            Operation.Unreserve.newBuilder().addAllResources(resourceList).build()).build();
+    driver.acceptOffers(OFFER_A_ID, ImmutableList.of(unreserve), OFFER_FILTER);
+    control.replay();
+    offerManager.unReserveOffer(OFFER_A_ID, resourceList);
+  }
+
   private static HostOffer setMode(HostOffer offer, MaintenanceMode mode) {
     return new HostOffer(
         offer.getOffer(),
         IHostAttributes.build(offer.getAttributes().newBuilder().setMode(mode)));
   }
+
 }

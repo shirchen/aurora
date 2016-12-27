@@ -13,7 +13,9 @@
  */
 package org.apache.aurora.scheduler.offers;
 
+import java.util.Collections;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -43,6 +45,8 @@ import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.async.AsyncModule.AsyncExecutor;
 import org.apache.aurora.scheduler.async.DelayExecutor;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
+import org.apache.aurora.scheduler.events.EventSink;
+import org.apache.aurora.scheduler.events.PubsubEvent;
 import org.apache.aurora.scheduler.events.PubsubEvent.DriverDisconnected;
 import org.apache.aurora.scheduler.events.PubsubEvent.EventSubscriber;
 import org.apache.aurora.scheduler.mesos.Driver;
@@ -90,6 +94,13 @@ public interface OfferManager extends EventSubscriber {
    * @param groupKey Task group key to exclude.
    */
   void banOffer(OfferID offerId, TaskGroupKey groupKey);
+
+  /**
+   *
+   * @param offerId Offer ID for offer whose resources we will unreserve.
+   * @param reservedResourceList List of resources to unreserve.
+   */
+  void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList);
 
   /**
    * Launches the task matched against the offer.
@@ -155,6 +166,7 @@ public interface OfferManager extends EventSubscriber {
     private final OfferSettings offerSettings;
     private final DelayExecutor executor;
     private final StatsProvider statsProvider;
+    private final EventSink eventSink;
 
     @Inject
     @VisibleForTesting
@@ -162,6 +174,7 @@ public interface OfferManager extends EventSubscriber {
         Driver driver,
         OfferSettings offerSettings,
         StatsProvider statsProvider,
+        EventSink eventSink,
         @AsyncExecutor DelayExecutor executor) {
 
       this.driver = requireNonNull(driver);
@@ -169,6 +182,7 @@ public interface OfferManager extends EventSubscriber {
       this.executor = requireNonNull(executor);
       this.statsProvider = requireNonNull(statsProvider);
       this.hostOffers = new HostOffers(statsProvider);
+      this.eventSink = requireNonNull(eventSink);
     }
 
     @Override
@@ -187,6 +201,7 @@ public interface OfferManager extends EventSubscriber {
         decline(offer.getOffer().getId());
         removeAndDecline(sameSlave.get().getOffer().getId());
       } else {
+        eventSink.post(new PubsubEvent.OfferAdded(offer));
         hostOffers.add(offer);
         executor.execute(
             () -> removeAndDecline(offer.getOffer().getId()),
@@ -352,6 +367,20 @@ public interface OfferManager extends EventSubscriber {
     @Override
     public void banOffer(OfferID offerId, TaskGroupKey groupKey) {
       hostOffers.addStaticGroupBan(offerId, groupKey);
+    }
+
+    @Override
+    public void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList) {
+      Operation unreserve = Protos.Offer.Operation.newBuilder()
+          .setType(Operation.Type.UNRESERVE)
+          .setUnreserve(
+              Protos.Offer.Operation.Unreserve.newBuilder()
+                  .addAllResources(reservedResourceList)
+                  .build())
+          .build();
+
+      List<Operation> operations = ImmutableList.of(unreserve);
+      driver.acceptOffers(offerId, operations, getOfferFilter());
     }
 
     @Timed("offer_manager_launch_task")

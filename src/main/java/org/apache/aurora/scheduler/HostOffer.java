@@ -13,6 +13,7 @@
  */
 package org.apache.aurora.scheduler;
 
+import java.util.List;
 import java.util.Objects;
 
 import com.google.common.base.MoreObjects;
@@ -22,6 +23,7 @@ import com.google.common.cache.LoadingCache;
 
 import org.apache.aurora.scheduler.resources.ResourceBag;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
+import org.apache.mesos.Protos.Resource;
 
 import static java.util.Objects.requireNonNull;
 
@@ -59,6 +61,17 @@ public class HostOffer {
 
   public ResourceBag getResourceBag(TierInfo tierInfo) {
     return resourceBagCache.getUnchecked(tierInfo);
+  }
+
+  public boolean hasReserved() {
+    List<Resource> resourceList = offer.getResourcesList();
+    for (Resource resource : resourceList) {
+      Resource.ReservationInfo resInfo = resource.getReservation();
+      if (resInfo.isInitialized()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   @Override

@@ -13,6 +13,7 @@
  */
 package org.apache.aurora.scheduler.base;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.Objects;
 
