@@ -13,6 +13,7 @@
  */
 package org.apache.aurora.scheduler.offers;
 
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -375,6 +376,17 @@ public interface OfferManager extends EventSubscriber {
     @Override
     public void banOffer(OfferID offerId, TaskGroupKey groupKey) {
       hostOffers.addStaticGroupBan(offerId, groupKey);
+    }
+
+    @Override
+    public void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList) {
+      Operation unreserve = Protos.Offer.Operation.newBuilder()
+          .setType(Operation.Type.UNRESERVE)
+          .setUnreserve(
+              Protos.Offer.Operation.Unreserve.newBuilder().addAllResources(reservedResourceList).build()).build();
+
+      List<Operation> operations = Collections.singletonList(unreserve);
+      driver.acceptOffers(offerId, operations, getOfferFilter());
     }
 
     @Timed("offer_manager_launch_task")
