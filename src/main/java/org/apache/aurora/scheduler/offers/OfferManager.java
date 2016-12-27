@@ -95,6 +95,13 @@ public interface OfferManager extends EventSubscriber {
   void banOffer(OfferID offerId, TaskGroupKey groupKey);
 
   /**
+   *
+   * @param offerId Offer ID for offer whose resources we will unreserve.
+   * @param reservedResourceList List of resources to unreserve.
+   */
+  void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList);
+
+  /**
    * Launches the task matched against the offer.
    *
    * @param offerId Matched offer ID.
