@@ -24,6 +24,7 @@ import org.apache.aurora.common.args.constraints.NotNegative;
 import org.apache.aurora.common.quantity.Amount;
 import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.common.util.Random;
+import org.apache.aurora.scheduler.events.PubsubEvent;
 import org.apache.aurora.scheduler.events.PubsubEventModule;
 
 /**
@@ -68,5 +69,14 @@ public class OffersModule extends AbstractModule {
       }
     });
     PubsubEventModule.bindSubscriber(binder(), OfferManager.class);
+
+    install(new PrivateModule() {
+      @Override
+      protected void configure() {
+        bind(OfferReconciler.class).in(Singleton.class);
+        expose(OfferReconciler.class);
+      }
+    });
+    PubsubEventModule.bindSubscriber(binder(), OfferReconciler.class);
   }
 }

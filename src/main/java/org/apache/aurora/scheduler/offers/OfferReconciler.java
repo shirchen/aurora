@@ -7,7 +7,6 @@ import com.google.common.eventbus.Subscribe;
 import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.base.*;
 import org.apache.aurora.scheduler.events.PubsubEvent;
-import org.apache.aurora.scheduler.storage.ReservationStore;
 import org.apache.aurora.scheduler.storage.Storage;
 import org.apache.aurora.scheduler.storage.entities.IJobKey;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
@@ -20,25 +19,18 @@ import java.util.Arrays;
 import java.util.List;
 
 
-//TODO: add code that will occasionally kick off and reconcile number of tasks with number of reserved offers
-
 public class OfferReconciler implements PubsubEvent.EventSubscriber {
 
   private static final Logger LOG = LoggerFactory.getLogger(OfferReconciler.class);
 
   private final OfferManager offerManager;
-//  private final ReservationStore reservationStore;
   private final Storage storage;
 
   @Inject
   @VisibleForTesting
-  public OfferReconciler(
-      OfferManager offerManager,
-//      ReservationStore reservationStore,
-      Storage storage)
+  public OfferReconciler(OfferManager offerManager, Storage storage)
   {
     this.offerManager = offerManager;
-//    this.reservationStore = reservationStore;
     this.storage = storage;
   }
 
@@ -51,32 +43,17 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
     List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
     //TODO: we should only unreserve resource that we reserved, not the entire offer. Is this true?
     boolean unreserve = false;
-
-
-
-//    LOG.info("Inside offerAdded callback with state of: " + offerManager.getReservedTasks().toString());
-
-
-    //TODO: put back
-    LOG.info("Inside offerAdded callback with state of: " + storage.read(storeProvider -> storeProvider.getReservationStore().fetchReservedTasks()));
-
     String task_name = "";
     // How do we know that this is our our offer?
-
     for (Protos.Resource resource: resourceList) {
       Protos.Resource.ReservationInfo resInfo = resource.getReservation();
       Protos.Labels labels = resInfo.getLabels();
       for (Protos.Label label: labels.getLabelsList()) {
-        // TODO: how to loop through two labels
         task_name = label.getValue();
-        LOG.info(("Found task_name " + task_name));
         // task_name is gonna be of 'role/env/job_name/0' format.
-
-
+        LOG.debug(("Found task_name " + task_name));
         // Now all tasks that are not in progress will be in PENDING, ASSIGNED, etc, but NOT
         // RUNNING. So if a task is in RUNNING, then unreserve. Otherwise, we may need this offer.
-
-
         LOG.info("task_name: " + task_name);
 
         List<String> parsed = Splitter.on("/").splitToList(task_name);
@@ -109,7 +86,7 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
       if (unreserve) {
         // TODO: Here we are unreserving one resource at a time. We should batch them and do them all at once.
         LOG.info("Attempting to unreserve resource" + offer.getOffer().getId() + "for task " + task_name);
-        this.offerManager.unReserveOffer(offer.getOffer().getId(), Arrays.asList(resource));
+        offerManager.unReserveOffer(offer.getOffer().getId(), Arrays.asList(resource));
         break;
       }
     }

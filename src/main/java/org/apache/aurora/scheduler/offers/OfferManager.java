@@ -14,6 +14,7 @@
 package org.apache.aurora.scheduler.offers;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
@@ -43,6 +44,8 @@ import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.async.AsyncModule.AsyncExecutor;
 import org.apache.aurora.scheduler.async.DelayExecutor;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
+import org.apache.aurora.scheduler.events.EventSink;
+import org.apache.aurora.scheduler.events.PubsubEvent;
 import org.apache.aurora.scheduler.events.PubsubEvent.DriverDisconnected;
 import org.apache.aurora.scheduler.events.PubsubEvent.EventSubscriber;
 import org.apache.aurora.scheduler.mesos.Driver;
@@ -155,6 +158,7 @@ public interface OfferManager extends EventSubscriber {
     private final OfferSettings offerSettings;
     private final DelayExecutor executor;
     private final StatsProvider statsProvider;
+    private final EventSink eventSink;
 
     @Inject
     @VisibleForTesting
@@ -162,6 +166,7 @@ public interface OfferManager extends EventSubscriber {
         Driver driver,
         OfferSettings offerSettings,
         StatsProvider statsProvider,
+        EventSink eventSink,
         @AsyncExecutor DelayExecutor executor) {
 
       this.driver = requireNonNull(driver);
@@ -169,6 +174,7 @@ public interface OfferManager extends EventSubscriber {
       this.executor = requireNonNull(executor);
       this.statsProvider = requireNonNull(statsProvider);
       this.hostOffers = new HostOffers(statsProvider);
+      this.eventSink = requireNonNull(eventSink);
     }
 
     @Override
@@ -187,6 +193,16 @@ public interface OfferManager extends EventSubscriber {
         decline(offer.getOffer().getId());
         removeAndDecline(sameSlave.get().getOffer().getId());
       } else {
+        // See if any of the resources were dynamically reserved.
+        List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
+        for (Protos.Resource resource : resourceList) {
+          Protos.Resource.ReservationInfo resInfo = resource.getReservation();
+          if (resInfo.isInitialized()) {
+            eventSink.post(new PubsubEvent.OfferAdded(offer));
+            break;
+          }
+        }
+
         hostOffers.add(offer);
         executor.execute(
             () -> removeAndDecline(offer.getOffer().getId()),
