@@ -15,10 +15,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 
+/**
+ * A pubsub event subscriber that tries accepts an OfferAdded message and unreserve previously
+ * dynamically reserved resources that are no longer needed.
+ * Logic is as follows:
+ *  We loop over the entire list of resources as part of that offer since not all resources may need
+ *  to be unreserved.
+ *  The we try to match the label which is a task name in form of 'role/env/job_name/0' to an
+ * existing task that is in an active state but is not running.
+ *  Why? We want to only unreserve resources part of an offer that came back and which tasks are not
+ *  in process of being scheduled. We could get resources that come back after we have either killed
+ *  a task or did some resource shaping: either decreased or increased necessary resources for a
+ *  task.
+ */
 public class OfferReconciler implements PubsubEvent.EventSubscriber {
 
   private static final Logger LOG = LoggerFactory.getLogger(OfferReconciler.class);
@@ -34,60 +47,39 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
     this.storage = storage;
   }
 
+  private static Query.Builder buildQuery(Protos.Label label) {
+    // Now all tasks that are not in progress will be in PENDING, ASSIGNED, etc, but NOT
+    // RUNNING. So if a task is in RUNNING, then unreserve. Otherwise, we may need this offer.
+    // task_name is gonna be of 'role/env/job_name/0' format.
+    String taskName = label.getValue();
+    List<String> parsed = Splitter.on("/").splitToList(taskName);
+    IJobKey jobKey2 = JobKeys.from(parsed.get(0), parsed.get(1), parsed.get(2));
+    int instanceId = Integer.parseInt(parsed.get(3));
+
+    return Query.instanceScoped(jobKey2, instanceId).activeNotRunning();
+  }
+
   @Subscribe
   public void offerAdded(PubsubEvent.OfferAdded offerAdded) {
-    // Works by looking for a task_name included as part of a resource of an offer TaskInfo.getName()
-    // and then trying to find a task in active state in the store. If none are found, then
-    // unreserve the offer.
     HostOffer offer = offerAdded.getOffer();
     List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
-    //TODO: we should only unreserve resource that we reserved, not the entire offer. Is this true?
-    boolean unreserve = false;
-    String task_name = "";
-    // How do we know that this is our our offer?
     for (Protos.Resource resource: resourceList) {
       Protos.Resource.ReservationInfo resInfo = resource.getReservation();
       Protos.Labels labels = resInfo.getLabels();
+      // Label list should only have one label, but this is defensive code.
       for (Protos.Label label: labels.getLabelsList()) {
-        task_name = label.getValue();
-        // task_name is gonna be of 'role/env/job_name/0' format.
-        LOG.debug(("Found task_name " + task_name));
-        // Now all tasks that are not in progress will be in PENDING, ASSIGNED, etc, but NOT
-        // RUNNING. So if a task is in RUNNING, then unreserve. Otherwise, we may need this offer.
-        LOG.info("task_name: " + task_name);
-
-        List<String> parsed = Splitter.on("/").splitToList(task_name);
-        IJobKey jobKey2 = JobKeys.from(parsed.get(0), parsed.get(1), parsed.get(2));
-        int instanceId = Integer.parseInt(parsed.get(3));
-
-        //TODO: scope down to all in transition state but not RUNNING, since RUNNING means that
-        // it could be an extra offer with changed resources.
-
         Iterable<IScheduledTask> foundTasks = storage.read(
-            storeProvider -> storeProvider.getTaskStore().fetchTasks(Query.instanceScoped(jobKey2, instanceId).activeNotRunning()));
-
+            storeProvider -> storeProvider.getTaskStore().fetchTasks(buildQuery(label)));
         // Will return all instances of active tasks for a jobKey. After a task is killed for an update, it transitions
         // into a PENDING state as part of same transaction. So if we dont have any active tasks, then we are OK.
-
-        LOG.info("Number of found tasks " + Iterables.size(foundTasks));
-        LOG.info("Found tasks" + foundTasks.toString());
-
-        // Right now we are unreserving if we find no active tasks matching the label on the offer.
-        // But what if the offer does not match anymore? What if we have more dynamic reservations than we have running
-        // tasks. If we made it here, then it's possible that either a task is getting launched OR we no longer need it.
-
-        // TODO: OR if we have unneeded reservations eg after we did resource reshaping or decreased instance count
+        LOG.debug("Number of found tasks " + Iterables.size(foundTasks));
+        LOG.debug("Found tasks" + foundTasks.toString());
         if (Iterables.isEmpty(foundTasks)) {
-          unreserve = true;
+          LOG.debug("Attempting to unreserve resource" + offer.getOffer().getId() + "for label " +
+              label.toString());
+          offerManager.unReserveOffer(offer.getOffer().getId(), Collections.singletonList(resource));
           break;
         }
-      }
-      // We unreserve inside this for loop because we dont want to unreserve resources we did not reserve.
-      if (unreserve) {
-        // TODO: Here we are unreserving one resource at a time. We should batch them and do them all at once.
-        LOG.info("Attempting to unreserve resource" + offer.getOffer().getId() + "for task " + task_name);
-        offerManager.unReserveOffer(offer.getOffer().getId(), Arrays.asList(resource));
-        break;
       }
     }
   }
