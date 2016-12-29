@@ -20,7 +20,7 @@ import java.util.List;
 
 
 /**
- * A pubsub event subscriber that tries accepts an OfferAdded message and unreserve previously
+ * A pubsub event subscriber that accepts an OfferAdded message and unreserves previously
  * dynamically reserved resources that are no longer needed.
  * Logic is as follows:
  *  We loop over the entire list of resources as part of that offer since not all resources may need

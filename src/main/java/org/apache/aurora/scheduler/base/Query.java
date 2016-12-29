@@ -370,13 +370,9 @@ public final class Query {
      * @return A new Builder scoped to Tasks#ACTIVE_STATES excluding RUNNING.
      */
     public Builder activeNotRunning() {
-      ArrayList<ScheduleStatus> filteredStatus = new ArrayList<>();
-      for (ScheduleStatus ss : Tasks.ACTIVE_STATES) {
-        if (ss != ScheduleStatus.RUNNING) {
-          filteredStatus.add(ss);
-        }
-      }
-      return byStatus(filteredStatus);
+      EnumSet<ScheduleStatus> statuses = EnumSet.copyOf(Tasks.ACTIVE_STATES);
+      statuses.remove(ScheduleStatus.RUNNING);
+      return byStatus(statuses);
     }
 
     /**
