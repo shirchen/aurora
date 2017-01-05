@@ -12,6 +12,7 @@ import org.apache.aurora.scheduler.events.PubsubEvent.OfferAdded;
 import org.apache.aurora.scheduler.storage.Storage;
 import org.apache.aurora.scheduler.storage.entities.IJobKey;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
+import org.apache.commons.lang.StringUtils;
 import org.apache.mesos.Protos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +50,24 @@ public class OfferReconciler implements EventSubscriber {
     this.storage = storage;
   }
 
+  public static boolean isValidLabel(Protos.Label label) {
+    // Helper to check whether a label can potentially generate a task_name that we can pull from
+    // TaskStore.
+    boolean valid = false;
+
+    String keyLabel = label.getKey();
+    String valueLabel = label.getValue();
+    // We expect label to be in form of role/env/job_name/0
+    if (keyLabel.equals("task_name")
+        && (Splitter.on("/").splitToList(valueLabel).size() == 4)
+        && StringUtils.isNumeric(Splitter.on("/").splitToList(valueLabel).get(3))
+        && ! Splitter.on("/").splitToList(valueLabel).contains("")
+        ) {
+      valid = true;
+    }
+    return valid;
+  }
+
   public static Query.Builder buildQuery(Protos.Label label) {
     // Now all tasks that are not in progress will be in PENDING, ASSIGNED, etc, but NOT
     // RUNNING. So if a task is in RUNNING, then unreserve. Otherwise, we may need this offer.
@@ -58,7 +77,6 @@ public class OfferReconciler implements EventSubscriber {
     IJobKey jobKey = JobKeys.from(parsed.get(0), parsed.get(1), parsed.get(2));
     // Assuming that instance_id will always be set to an int inside OfferManager.
     int instanceId = Integer.parseInt(parsed.get(3));
-
     return Query.instanceScoped(jobKey, instanceId).activeNotRunning();
   }
 
@@ -71,16 +89,16 @@ public class OfferReconciler implements EventSubscriber {
       Protos.Labels labels = resInfo.getLabels();
       // Label list should only have one label, but this is defensive code.
       for (Protos.Label label: labels.getLabelsList()) {
-        Iterable<IScheduledTask> foundTasks = storage.read(
-            storeProvider -> storeProvider.getTaskStore().fetchTasks(OfferReconciler.buildQuery(label)));
-        // Will return all instances of active tasks for a jobKey. After a task is killed for an update, it transitions
-        // into a PENDING state as part of same transaction. So if we dont have any active tasks, then we are OK.
-        LOG.debug("Found tasks" + foundTasks.toString());
-        if (Iterables.isEmpty(foundTasks)) {
-          LOG.debug("Attempting to unreserve resource" + offer.getOffer().getId() + "for label " +
-              label.toString());
-          offerManager.unReserveOffer(offer.getOffer().getId(), Collections.singletonList(resource));
-          break;
+        if (isValidLabel(label)) {
+          Iterable<IScheduledTask> foundTasks = storage.read(storeProvider -> storeProvider.getTaskStore().fetchTasks(OfferReconciler.buildQuery(label)));
+          // Will return all instances of active tasks for a jobKey. After a task is killed for an update, it transitions
+          // into a PENDING state as part of same transaction. So if we dont have any active tasks, then we are OK.
+          LOG.debug("Found tasks" + foundTasks.toString());
+          if (Iterables.isEmpty(foundTasks)) {
+            LOG.debug("Attempting to unreserve resource" + offer.getOffer().getId() + "for label " + label.toString());
+            offerManager.unReserveOffer(offer.getOffer().getId(), Collections.singletonList(resource));
+            break;
+          }
         }
       }
     }
