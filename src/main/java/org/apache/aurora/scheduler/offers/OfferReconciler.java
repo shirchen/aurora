@@ -5,8 +5,10 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.Iterables;
 import com.google.common.eventbus.Subscribe;
 import org.apache.aurora.scheduler.HostOffer;
-import org.apache.aurora.scheduler.base.*;
-import org.apache.aurora.scheduler.events.PubsubEvent;
+import org.apache.aurora.scheduler.base.Query;
+import org.apache.aurora.scheduler.base.JobKeys;
+import org.apache.aurora.scheduler.events.PubsubEvent.EventSubscriber;
+import org.apache.aurora.scheduler.events.PubsubEvent.OfferAdded;
 import org.apache.aurora.scheduler.storage.Storage;
 import org.apache.aurora.scheduler.storage.entities.IJobKey;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
@@ -32,7 +34,7 @@ import java.util.List;
  *  a task or did some resource shaping: either decreased or increased necessary resources for a
  *  task.
  */
-public class OfferReconciler implements PubsubEvent.EventSubscriber {
+public class OfferReconciler implements EventSubscriber {
 
   private static final Logger LOG = LoggerFactory.getLogger(OfferReconciler.class);
 
@@ -47,20 +49,21 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
     this.storage = storage;
   }
 
-  private static Query.Builder buildQuery(Protos.Label label) {
+  public static Query.Builder buildQuery(Protos.Label label) {
     // Now all tasks that are not in progress will be in PENDING, ASSIGNED, etc, but NOT
     // RUNNING. So if a task is in RUNNING, then unreserve. Otherwise, we may need this offer.
     // task_name is gonna be of 'role/env/job_name/0' format.
     String taskName = label.getValue();
     List<String> parsed = Splitter.on("/").splitToList(taskName);
-    IJobKey jobKey2 = JobKeys.from(parsed.get(0), parsed.get(1), parsed.get(2));
+    IJobKey jobKey = JobKeys.from(parsed.get(0), parsed.get(1), parsed.get(2));
+    // Assuming that instance_id will always be set to an int inside OfferManager.
     int instanceId = Integer.parseInt(parsed.get(3));
 
-    return Query.instanceScoped(jobKey2, instanceId).activeNotRunning();
+    return Query.instanceScoped(jobKey, instanceId).activeNotRunning();
   }
 
   @Subscribe
-  public void offerAdded(PubsubEvent.OfferAdded offerAdded) {
+  public void offerAdded(OfferAdded offerAdded) {
     HostOffer offer = offerAdded.getOffer();
     List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
     for (Protos.Resource resource: resourceList) {
@@ -69,10 +72,9 @@ public class OfferReconciler implements PubsubEvent.EventSubscriber {
       // Label list should only have one label, but this is defensive code.
       for (Protos.Label label: labels.getLabelsList()) {
         Iterable<IScheduledTask> foundTasks = storage.read(
-            storeProvider -> storeProvider.getTaskStore().fetchTasks(buildQuery(label)));
+            storeProvider -> storeProvider.getTaskStore().fetchTasks(OfferReconciler.buildQuery(label)));
         // Will return all instances of active tasks for a jobKey. After a task is killed for an update, it transitions
         // into a PENDING state as part of same transaction. So if we dont have any active tasks, then we are OK.
-        LOG.debug("Number of found tasks " + Iterables.size(foundTasks));
         LOG.debug("Found tasks" + foundTasks.toString());
         if (Iterables.isEmpty(foundTasks)) {
           LOG.debug("Attempting to unreserve resource" + offer.getOffer().getId() + "for label " +

@@ -30,6 +30,7 @@ import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.async.DelayExecutor;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
 import org.apache.aurora.scheduler.base.Tasks;
+import org.apache.aurora.scheduler.events.EventSink;
 import org.apache.aurora.scheduler.events.PubsubEvent.DriverDisconnected;
 import org.apache.aurora.scheduler.events.PubsubEvent.HostAttributesChanged;
 import org.apache.aurora.scheduler.mesos.Driver;
@@ -107,7 +108,8 @@ public class OfferManagerImplTest extends EasyMockTest {
         Amount.of(OFFER_FILTER_SECONDS, Time.SECONDS),
         () -> RETURN_DELAY);
     StatsProvider stats = new FakeStatsProvider();
-    offerManager = new OfferManagerImpl(driver, offerSettings, stats, executorMock);
+    EventSink eventSink = createMock(EventSink.class);
+    offerManager = new OfferManagerImpl(driver, offerSettings, stats, eventSink, executorMock);
   }
 
   @Test
@@ -304,4 +306,6 @@ public class OfferManagerImplTest extends EasyMockTest {
         offer.getOffer(),
         IHostAttributes.build(offer.getAttributes().newBuilder().setMode(mode)));
   }
+
+  // TODO: add a test that an event gets posted if offer contains reserved resources
 }
