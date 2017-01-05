@@ -31,6 +31,7 @@ import org.apache.aurora.scheduler.async.DelayExecutor;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
 import org.apache.aurora.scheduler.base.Tasks;
 import org.apache.aurora.scheduler.events.EventSink;
+import org.apache.aurora.scheduler.events.PubsubEvent;
 import org.apache.aurora.scheduler.events.PubsubEvent.DriverDisconnected;
 import org.apache.aurora.scheduler.events.PubsubEvent.HostAttributesChanged;
 import org.apache.aurora.scheduler.mesos.Driver;
@@ -97,6 +98,7 @@ public class OfferManagerImplTest extends EasyMockTest {
   private Driver driver;
   private FakeScheduledExecutor clock;
   private OfferManagerImpl offerManager;
+  private EventSink eventSink;
 
   @Before
   public void setUp() {
@@ -108,7 +110,7 @@ public class OfferManagerImplTest extends EasyMockTest {
         Amount.of(OFFER_FILTER_SECONDS, Time.SECONDS),
         () -> RETURN_DELAY);
     StatsProvider stats = new FakeStatsProvider();
-    EventSink eventSink = createMock(EventSink.class);
+    eventSink = createMock(EventSink.class);
     offerManager = new OfferManagerImpl(driver, offerSettings, stats, eventSink, executorMock);
   }
 
@@ -301,11 +303,34 @@ public class OfferManagerImplTest extends EasyMockTest {
     clock.advance(RETURN_DELAY);
   }
 
+//  @Test
+//  public void testAddOfferPosted() {
+////    HostOffer offer = HostOffers.makeHostOffer(HostOffers.LABEL);
+//    HostOffer offer = new HostOffer(
+//        Protos.Offer.newBuilder()
+//            .setId(Protos.OfferID.newBuilder().setValue("offer_id"))
+//            .setFrameworkId(Protos.FrameworkID.newBuilder().setValue("framework_id"))
+//            .setSlaveId(Protos.SlaveID.newBuilder().setValue("slave_id"))
+//            .setHostname("host_name")
+//            .addResources(HostOffers.makeCPUResource(HostOffers.LABEL))
+//            .build(),
+//        IHostAttributes.build(new HostAttributes().setMode(NONE)));
+//
+//    eventSink.post(new PubsubEvent.OfferAdded(offer));
+//    expectLastCall();
+//    driver.declineOffer(offer.getOffer().getId(), OFFER_FILTER);
+//    control.replay();
+//
+//
+//    offerManager.addOffer(offer);
+//    clock.advance(Amount.of(1L, Time.MINUTES));
+//
+//  }
+
   private static HostOffer setMode(HostOffer offer, MaintenanceMode mode) {
     return new HostOffer(
         offer.getOffer(),
         IHostAttributes.build(offer.getAttributes().newBuilder().setMode(mode)));
   }
 
-  // TODO: add a test that an event gets posted if offer contains reserved resources
 }

@@ -24,15 +24,13 @@ import com.google.gson.Gson;
 import com.hubspot.jackson.datatype.protobuf.ProtobufModule;
 
 import org.apache.aurora.common.testing.easymock.EasyMockTest;
-import org.apache.aurora.gen.HostAttributes;
 import org.apache.aurora.scheduler.HostOffer;
+import org.apache.aurora.scheduler.offers.HostOffers;
 import org.apache.aurora.scheduler.offers.OfferManager;
-import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 import org.apache.mesos.Protos;
 import org.junit.Before;
 import org.junit.Test;
 
-import static org.apache.aurora.gen.MaintenanceMode.NONE;
 import static org.easymock.EasyMock.expect;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -60,79 +58,7 @@ public class OffersTest extends EasyMockTest {
 
   @Test
   public void testOneOffer() throws Exception {
-    HostOffer offer = new HostOffer(
-        Protos.Offer.newBuilder()
-            .setId(Protos.OfferID.newBuilder().setValue("offer_id"))
-            .setFrameworkId(Protos.FrameworkID.newBuilder().setValue("framework_id"))
-            .setSlaveId(Protos.SlaveID.newBuilder().setValue("slave_id"))
-            .setHostname("host_name")
-            .addResources(Protos.Resource.newBuilder()
-                .setName("cpus")
-                .setType(Protos.Value.Type.SCALAR)
-                .setScalar(Protos.Value.Scalar.newBuilder().setValue(1.0).build())
-                .setReservation(Protos.Resource.ReservationInfo.newBuilder()
-                    .setLabels(Protos.Labels.newBuilder()
-                        .addLabels(Protos.Label.newBuilder()
-                            .setKey("key")
-                            .setValue("value"))
-                        .build())
-                    .build())
-                .build())
-            .addResources(Protos.Resource.newBuilder()
-                .setName("mem")
-                .setType(Protos.Value.Type.SCALAR)
-                .setScalar(Protos.Value.Scalar.newBuilder().setValue(128.0).build())
-                .setReservation(Protos.Resource.ReservationInfo.newBuilder().build())
-                .build())
-            .addResources(Protos.Resource.newBuilder()
-                .setName("disk")
-                .setType(Protos.Value.Type.SCALAR)
-                .setScalar(Protos.Value.Scalar.newBuilder().setValue(128.0).build())
-                .setReservation(Protos.Resource.ReservationInfo.newBuilder()
-                    .setLabels(Protos.Labels.newBuilder()
-                        .addLabels(Protos.Label.newBuilder()
-                            .setKey("key"))
-                        .build())
-                    .build())
-                .setDisk(Protos.Resource.DiskInfo.newBuilder()
-                    .setPersistence(Protos.Resource.DiskInfo.Persistence.newBuilder()
-                        .setId("volume")
-                        .build())
-                    .setVolume(Protos.Volume.newBuilder()
-                        .setContainerPath("path")
-                        .setMode(Protos.Volume.Mode.RW)
-                        .setImage(Protos.Image.newBuilder()
-                            .setType(Protos.Image.Type.DOCKER)
-                            .setDocker(Protos.Image.Docker.newBuilder()
-                                .setName("image")
-                                .build())
-                            .build())
-                        .build())
-                    .setSource(Protos.Resource.DiskInfo.Source.newBuilder()
-                        .setType(Protos.Resource.DiskInfo.Source.Type.PATH)
-                        .setPath(Protos.Resource.DiskInfo.Source.Path.newBuilder()
-                            .setRoot("root")
-                            .build())
-                        .build())
-                    .build())
-                .build())
-            .addResources(Protos.Resource.newBuilder()
-                .setName("gpus")
-                .setType(Protos.Value.Type.SCALAR)
-                .setScalar(Protos.Value.Scalar.newBuilder().setValue(4.0).build())
-                .build())
-            .addResources(Protos.Resource.newBuilder()
-                .setName("ports")
-                .setType(Protos.Value.Type.RANGES)
-                .setRanges(Protos.Value.Ranges.newBuilder()
-                    .addRange(Protos.Value.Range.newBuilder()
-                        .setBegin(31000)
-                        .setEnd(32000)
-                        .build())
-                    .build())
-                .build())
-            .build(),
-        IHostAttributes.build(new HostAttributes().setMode(NONE)));
+    HostOffer offer = HostOffers.makeHostOffer();
 
     expect(offerManager.getOffers()).andReturn(ImmutableSet.of(offer));
 
