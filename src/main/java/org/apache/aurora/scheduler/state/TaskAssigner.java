@@ -14,8 +14,10 @@
 package org.apache.aurora.scheduler.state;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import javax.inject.Inject;
@@ -25,11 +27,13 @@ import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 
+import com.google.common.collect.Maps;
 import org.apache.aurora.common.inject.TimedInterceptor.Timed;
 import org.apache.aurora.common.stats.StatsProvider;
 import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.TierInfo;
 import org.apache.aurora.scheduler.TierManager;
+import org.apache.aurora.scheduler.base.JobKeys;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
 import org.apache.aurora.scheduler.filter.SchedulingFilter;
 import org.apache.aurora.scheduler.filter.SchedulingFilter.ResourceRequest;
@@ -41,7 +45,8 @@ import org.apache.aurora.scheduler.offers.OfferManager;
 import org.apache.aurora.scheduler.resources.ResourceManager;
 import org.apache.aurora.scheduler.resources.ResourceType;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
-import org.apache.mesos.Protos.TaskInfo;
+import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
+import org.apache.mesos.Protos;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -93,6 +98,7 @@ public interface TaskAssigner {
     private final MesosTaskFactory taskFactory;
     private final OfferManager offerManager;
     private final TierManager tierManager;
+    private final Map<String, Integer> taskIdToStartTime = Maps.newHashMap();
 
     @Inject
     public TaskAssignerImpl(
@@ -123,7 +129,7 @@ public interface TaskAssigner {
       return assigned;
     }
 
-    private TaskInfo assign(
+    private IAssignedTask assign(
         MutableStoreProvider storeProvider,
         Offer offer,
         String taskId) {
@@ -138,7 +144,44 @@ public interface TaskAssigner {
       LOG.info(
           "Offer on agent {} (id {}) is being assigned task for {}.",
           host, offer.getSlaveId().getValue(), taskId);
-      return taskFactory.createFrom(assigned, offer);
+      return assigned;
+    }
+
+    private boolean waitedLongEnough(String taskId) {
+      boolean enoughWaiting = false;
+      Integer startedToWaitAt = this.taskIdToStartTime.get(taskId);
+      long timeMillis = System.currentTimeMillis();
+      long timeSeconds = TimeUnit.MILLISECONDS.toSeconds(timeMillis);
+      Integer timeNow =  (int)timeSeconds;
+      LOG.info("Waited " + (timeNow - startedToWaitAt) + "secs");
+      LOG.info("Map:" + this.taskIdToStartTime);
+      // If waited for more than 1 minute then just reserve the damn thing.
+      if (timeNow > startedToWaitAt + 60*1) {
+        enoughWaiting = true;
+      }
+
+      return enoughWaiting;
+    }
+
+    private boolean hasReservedResourcesInsideOfferForTask(ResourceRequest resourceRequest, HostOffer offer, int instanceId) {
+      boolean found = false;
+      List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
+      for (Protos.Resource resource : resourceList) {
+        Protos.Resource.ReservationInfo resInfo = resource.getReservation();
+        Protos.Labels labels = resInfo.getLabels();
+        List<Protos.Label> labelList = labels.getLabelsList();
+        for (Protos.Label label : labelList) {
+          String labelValue = label.getValue();
+          String taskName = JobKeys.canonicalString(resourceRequest.getTask().getJob()) + "/" + instanceId;
+          LOG.info("Task name extracted from task about to be scheduled is " + taskName + " while label is " + labelValue);
+          if (labelValue.equals(taskName)) {
+            LOG.info("Found our reservation");
+            found = true;
+            break;
+          }
+        }
+      }
+      return found;
     }
 
     @Timed("assigner_maybe_assign")
@@ -165,17 +208,56 @@ public interface TaskAssigner {
         Optional<TaskGroupKey> reservedGroup = Optional.fromNullable(
             slaveReservations.get(offer.getOffer().getSlaveId().getValue()));
 
+        boolean found = false;
         if (reservedGroup.isPresent() && !reservedGroup.get().equals(groupKey)) {
           // This slave is reserved for a different task group -> skip.
           continue;
         }
 
-        Set<Veto> vetoes = filter.filter(
-            new UnusedResource(offer.getResourceBag(tierInfo), offer.getAttributes()),
-            resourceRequest);
+        Set<Veto> vetoes = filter.filter(new UnusedResource(offer.getResourceBag(tierInfo), offer.getAttributes()), resourceRequest);
+        LOG.info("Recording vetoes: " + vetoes.toString());
+
+        if (tierInfo.isReserved()) {
+
+          String taskName2 = JobKeys.canonicalString(resourceRequest.getTask().getJob());
+          LOG.info("Trying to find " + taskName2 + " in this offer");
+
+          Optional<IScheduledTask> scheduledTask = storeProvider.getTaskStore().fetchTask(taskId);
+          if (scheduledTask.isPresent()) {
+            IAssignedTask assignedTask = scheduledTask.get().getAssignedTask();
+            String taskName3 = taskName2 + "/" + assignedTask.getInstanceId();
+
+            LOG.info("looking at task " + taskName3);
+
+            // TODO: Maybe persist inside memory or add a new store.
+//            LOG.info("State of reserved tasks " + storeProvider.getReservationStore().fetchReservedTasks());
+            if (tierInfo.isReserved()) {
+            // TODO: placeholder for usage of the ReservationStore
+            // if (storeProvider.getReservationStore().fetchReservedTasks().contains(taskName3)) {
+              LOG.info("Found task inside reserved list so it must be dynamically reserved " + taskName3);
+              long timeMillis = System.currentTimeMillis();
+              long timeSeconds = TimeUnit.MILLISECONDS.toSeconds(timeMillis);
+              LOG.info("Before put: " + this.taskIdToStartTime.toString());
+              this.taskIdToStartTime.putIfAbsent(taskId, (int) timeSeconds);
+              LOG.info("After put: " + this.taskIdToStartTime.toString());
+              LOG.info("current timer mapping " + this.taskIdToStartTime.toString());
+
+              // We must look for reserved offer and skip non-reserved ones.
+              found = hasReservedResourcesInsideOfferForTask(resourceRequest, offer, assignedTask.getInstanceId());
+              LOG.info("Whether offer has at least one resources reserved for this task: " + found);
+              if (!found && !waitedLongEnough(taskId)) {
+                // We did not find our offer nor waited long enough so continue looking for it.
+                LOG.info("Skipping offer because we are looking to launch a reserved task and did not"
+                    + " wait long enough. We can tell because the found flag is" + found);
+                continue;
+              }
+            }
+          }
+        }
 
         if (vetoes.isEmpty()) {
-          TaskInfo taskInfo = assign(
+//          TaskInfo taskInfo = assign(
+          IAssignedTask assignedTask = assign(
               storeProvider,
               offer.getOffer(),
               taskId);
@@ -183,7 +265,27 @@ public interface TaskAssigner {
           resourceRequest.getJobState().updateAttributeAggregate(offer.getAttributes());
 
           try {
-            offerManager.launchTask(offer.getOffer().getId(), taskInfo);
+            if (tierInfo.isReserved()) {
+              LOG.info("tierInfo is RESERVED: " + tierInfo.toString());
+              this.taskIdToStartTime.remove(taskId);
+
+              if (found) {
+                // Just need to perform launch operation.
+                LOG.info("Found the offer and launching task");
+                offerManager.launchTask(offer.getOffer(), assignedTask);
+//              return true;
+              } else {
+                LOG.info("Either did not find offer or launch for the first time");
+                // Need to perform reserve + launch operation.
+                offerManager.reserveAndLaunchTask(offer, assignedTask);
+
+//              return true;
+              }
+            } else {
+              // Task does not need reserved resources.
+              offerManager.launchTask(offer.getOffer(), assignedTask);
+            }
+
             assignmentResult.add(taskId);
 
             if (remainingTasks.hasNext()) {
