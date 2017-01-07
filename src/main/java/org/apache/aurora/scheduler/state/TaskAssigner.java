@@ -216,20 +216,14 @@ public interface TaskAssigner {
 
         Set<Veto> vetoes = filter.filter(new UnusedResource(offer.getResourceBag(tierInfo), offer.getAttributes()), resourceRequest);
         LOG.info("Recording vetoes: " + vetoes.toString());
-
         if (tierInfo.isReserved()) {
-
           String taskName2 = JobKeys.canonicalString(resourceRequest.getTask().getJob());
           LOG.info("Trying to find " + taskName2 + " in this offer");
-
           Optional<IScheduledTask> scheduledTask = storeProvider.getTaskStore().fetchTask(taskId);
           if (scheduledTask.isPresent()) {
             IAssignedTask assignedTask = scheduledTask.get().getAssignedTask();
             String taskName3 = taskName2 + "/" + assignedTask.getInstanceId();
-
             LOG.info("looking at task " + taskName3);
-
-            // TODO: Maybe persist inside memory or add a new store.
 //            LOG.info("State of reserved tasks " + storeProvider.getReservationStore().fetchReservedTasks());
             if (tierInfo.isReserved()) {
             // TODO: placeholder for usage of the ReservationStore
@@ -256,7 +250,6 @@ public interface TaskAssigner {
         }
 
         if (vetoes.isEmpty()) {
-//          TaskInfo taskInfo = assign(
           IAssignedTask assignedTask = assign(
               storeProvider,
               offer.getOffer(),
@@ -268,18 +261,14 @@ public interface TaskAssigner {
             if (tierInfo.isReserved()) {
               LOG.info("tierInfo is RESERVED: " + tierInfo.toString());
               this.taskIdToStartTime.remove(taskId);
-
               if (found) {
                 // Just need to perform launch operation.
                 LOG.info("Found the offer and launching task");
                 offerManager.launchTask(offer.getOffer(), assignedTask);
-//              return true;
               } else {
                 LOG.info("Either did not find offer or launch for the first time");
                 // Need to perform reserve + launch operation.
                 offerManager.reserveAndLaunchTask(offer, assignedTask);
-
-//              return true;
               }
             } else {
               // Task does not need reserved resources.

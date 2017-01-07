@@ -13,9 +13,7 @@
  */
 package org.apache.aurora.scheduler.offers;
 
-import java.util.Comparator;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -45,6 +43,9 @@ import org.apache.aurora.scheduler.base.TaskGroupKey;
 import org.apache.aurora.scheduler.events.PubsubEvent.DriverDisconnected;
 import org.apache.aurora.scheduler.events.PubsubEvent.EventSubscriber;
 import org.apache.aurora.scheduler.mesos.Driver;
+import org.apache.aurora.scheduler.mesos.DriverSettings;
+import org.apache.aurora.scheduler.mesos.MesosTaskFactory;
+import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 import org.apache.mesos.Protos;
 import org.apache.mesos.Protos.Offer.Operation;
@@ -65,6 +66,26 @@ import static org.apache.aurora.scheduler.events.PubsubEvent.HostAttributesChang
  * Tracks the Offers currently known by the scheduler.
  */
 public interface OfferManager extends EventSubscriber {
+
+  // add offerAdded type, OfferReconciliation imports offerAdded type.
+
+  void unReserveOffer(OfferID offerId, List<Protos.Resource> reservedResourceList);
+
+  /**
+   * Reserve the offer on behalf of the scheduler.
+   *
+   * @param offer Matched offer.
+   * @param task Matched task info.
+   */
+  void reserveAndLaunchTask(HostOffer offer, IAssignedTask task);
+
+  void launchAndReserveTask(HostOffer offer, IAssignedTask iAssignedTask) throws LaunchException;
+
+//  void removeTaskId(String taskId);
+
+
+//  HashSet<String> getReservedTasks();
+
 
   /**
    * Notifies the scheduler of a new resource offer.
@@ -93,11 +114,11 @@ public interface OfferManager extends EventSubscriber {
   /**
    * Launches the task matched against the offer.
    *
-   * @param offerId Matched offer ID.
+   * @param offer Matched offer.
    * @param task Matched task info.
    * @throws LaunchException If there was an error launching the task.
    */
-  void launchTask(OfferID offerId, Protos.TaskInfo task) throws LaunchException;
+  void launchTask(Protos.Offer offer, IAssignedTask task) throws LaunchException;
 
   /**
    * Notifies the offer queue that a host's attributes have changed.
@@ -159,6 +180,12 @@ public interface OfferManager extends EventSubscriber {
     private final Driver driver;
     private final OfferSettings offerSettings;
     private final DelayExecutor executor;
+    private final StatsProvider statsProvider;
+    private final MesosTaskFactory taskFactory;
+//    private final Storage storage;
+    private final DriverSettings driverSettings;
+//    private final ReservationStore.Mutable reservationStore;
+//    public HashSet<String> reservedTasks;
 
     @Inject
     @VisibleForTesting
@@ -166,13 +193,93 @@ public interface OfferManager extends EventSubscriber {
         Driver driver,
         OfferSettings offerSettings,
         StatsProvider statsProvider,
-        @AsyncExecutor DelayExecutor executor) {
+        MesosTaskFactory taskFactory,
+        @AsyncExecutor DelayExecutor executor,
+//        Storage storage,
+        DriverSettings driverSettings
+//        ReservationStore.Mutable reservationStore,
+//        EventSink eventSink
+    ) {
 
       this.driver = requireNonNull(driver);
       this.offerSettings = requireNonNull(offerSettings);
       this.executor = requireNonNull(executor);
-      this.hostOffers = new HostOffers(statsProvider);
       this.offerRaces = statsProvider.makeCounter(OFFER_ACCEPT_RACES);
+      this.statsProvider = requireNonNull(statsProvider);
+      this.taskFactory = requireNonNull(taskFactory);
+      this.hostOffers = new HostOffers(statsProvider);
+//      this.storage = storage;
+//      this.eventSink = requireNonNull(eventSink);
+      this.driverSettings = requireNonNull(driverSettings);
+//      this.reservationStore = requireNonNull(reservationStore);
+//      this.reservedTasks = new HashSet<String>();
+    }
+
+//    public HashSet<String> getReservedTasks() {
+//      return this.reservedTasks;
+//    }
+
+//    public void removeTaskId(String taskId) {
+//      this.reservedTasks.remove(taskId);
+//    }
+
+    @Override
+    public void reserveAndLaunchTask(HostOffer offer, IAssignedTask iAssignedTask) {
+      // This will sort our resources in the correct order and try to use the ones that have been reserved first.
+      Protos.TaskInfo task = taskFactory.createFrom(iAssignedTask, offer.getOffer());
+      OfferID offerId = offer.getOffer().getId();
+      LOG.info("Task name is " + task.getName());
+      String taskNameInstanceId = task.getName() + "/" + iAssignedTask.getInstanceId();
+      List<Protos.Resource> resourcesList = task.getResourcesList();
+      // TODO: need driverSettings to set role here.
+      List<Protos.Resource> reservedResourceList = new ArrayList<>();
+      for (Protos.Resource resource: resourcesList) {
+        List<Protos.Label> labels = new ArrayList<>();
+        labels.add(Protos.Label.newBuilder()
+            .setKey("task_name")
+            .setValue(taskNameInstanceId)
+              .build()
+        );
+        reservedResourceList.add(
+            Protos.Resource.newBuilder(resource)
+                // TODO: set role taken by the framework
+//                DriverSettings
+//                .setRole("aurora-role")
+                .setRole(driverSettings.getFrameworkInfo().getRole())
+                .setReservation(Protos.Resource.ReservationInfo.newBuilder()
+//                    .setPrincipal("aurora")
+                    // TODO: what if principal isn't set
+                    .setPrincipal(driverSettings.getFrameworkInfo().getPrincipal())
+                    .setLabels(Protos.Labels.newBuilder()
+                        .addAllLabels(labels).build())
+                )
+            .build()
+        );
+      }
+      Protos.TaskInfo newTask = task.toBuilder().clearResources().addAllResources(reservedResourceList).build();
+
+      Operation reserve = Protos.Offer.Operation.newBuilder()
+          .setType(Operation.Type.RESERVE)
+          .setReserve(
+              Protos.Offer.Operation.Reserve.newBuilder().addAllResources(reservedResourceList)
+          )
+          .build();
+      Operation launch = Protos.Offer.Operation.newBuilder()
+          .setType(Protos.Offer.Operation.Type.LAUNCH)
+          .setLaunch(Protos.Offer.Operation.Launch.newBuilder()
+              .addTaskInfos(newTask))
+          .build();
+//  Placeholder for AURORA-181? which will add ReservationStore
+//        storage.write(
+//            (Storage.MutateWork.NoResult.Quiet) storeProvider ->
+//              storeProvider.getReservationStore().saveReserervedTasks(taskNameInstanceId));
+
+//      reservationStore.saveReserervedTasks(taskNameInstanceId);
+//      this.reservedTasks.add(taskNameInstanceId);
+
+      List<Operation> operations = Arrays.asList(reserve, launch);
+      LOG.info("Finished building operation");
+      driver.acceptOffers(offerId, operations, getOfferFilter());
     }
 
     @Override
@@ -361,12 +468,44 @@ public interface OfferManager extends EventSubscriber {
 
     @Timed("offer_manager_launch_task")
     @Override
-    public void launchTask(OfferID offerId, Protos.TaskInfo task) throws LaunchException {
+    public void launchAndReserveTask(HostOffer offer, IAssignedTask iAssignedTask) throws LaunchException {
       // Guard against an offer being removed after we grabbed it from the iterator.
       // If that happens, the offer will not exist in hostOffers, and we can immediately
       // send it back to LOST for quick reschedule.
       // Removing while iterating counts on the use of a weakly-consistent iterator being used,
       // which is a feature of ConcurrentSkipListSet.
+//      Protos.TaskInfo task = taskFactory.createFrom(iAssignedTask, offer.getOffer());
+      OfferID offerId = offer.getOffer().getId();
+      if (hostOffers.remove(offerId)) {
+        try {
+
+          // See if task requires dynamic reservation or it's fine as is. If it does want a dynamic reservation
+          // then just use driver.current class, reserveAndLaunchTask() method.
+
+          reserveAndLaunchTask(offer, iAssignedTask);
+        } catch (IllegalStateException e) {
+          // TODO(William Farner): Catch only the checked exception produced by Driver
+          // once it changes from throwing IllegalStateException when the driver is not yet
+          // registered.
+          throw new LaunchException("Failed to launch task.", e);
+        }
+      } else {
+        offerRaces.incrementAndGet();
+        throw new LaunchException("Offer no longer exists in offer queue, likely data race.");
+      }
+    }
+
+
+    @Timed("offer_manager_launch_task")
+    @Override
+    public void launchTask(Protos.Offer offer, IAssignedTask iAssignedTask) throws LaunchException {
+      // Guard against an offer being removed after we grabbed it from the iterator.
+      // If that happens, the offer will not exist in hostOffers, and we can immediately
+      // send it back to LOST for quick reschedule.
+      // Removing while iterating counts on the use of a weakly-consistent iterator being used,
+      // which is a feature of ConcurrentSkipListSet.
+      OfferID offerId = offer.getId();
+      Protos.TaskInfo task = taskFactory.createFrom(iAssignedTask, offer);
       if (hostOffers.remove(offerId)) {
         try {
           Operation launch = Operation.newBuilder()

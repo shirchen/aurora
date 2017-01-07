@@ -64,11 +64,13 @@ public final class TaskTestUtil {
 
   public static final IJobKey JOB = JobKeys.from("role", "dev", "job");
   public static final TierInfo REVOCABLE_TIER =
-      new TierInfo(true /* preemptible */, true /* revocable */);
+      new TierInfo(true /* preemptible */, true /* revocable */, false /* reserved */);
   public static final TierInfo DEV_TIER =
-      new TierInfo(true /* preemptible */, false /* revocable */);
+      new TierInfo(true /* preemptible */, false /* revocable */, false /* reserved */);
   public static final TierInfo PREFERRED_TIER =
-      new TierInfo(false /* preemptible */, false /* revocable */);
+      new TierInfo(false /* preemptible */, false /* revocable */, false /* reserved */);
+  public static final TierInfo RESERVED_TIER =
+      new TierInfo(false /* preemptible */, false /* revocable */, true /* reserved */);
   public static final String PROD_TIER_NAME = "tier-prod";
   public static final String DEV_TIER_NAME = "tier-dev";
   public static final TierConfig TIER_CONFIG =
@@ -201,14 +203,16 @@ public final class TaskTestUtil {
     return ImmutableMap.of(
         "preferred", PREFERRED_TIER,
         "preemptible", DEV_TIER,
-        "revocable", REVOCABLE_TIER);
+        "revocable", REVOCABLE_TIER,
+        "reserved", RESERVED_TIER);
   }
 
   public static Set<org.apache.aurora.gen.TierConfig> tierConfigs() {
     return ImmutableSet.of(
         new org.apache.aurora.gen.TierConfig("preferred", PREFERRED_TIER.toMap()),
         new org.apache.aurora.gen.TierConfig("preemptible", DEV_TIER.toMap()),
-        new org.apache.aurora.gen.TierConfig("revocable", REVOCABLE_TIER.toMap())
+        new org.apache.aurora.gen.TierConfig("revocable", REVOCABLE_TIER.toMap()),
+        new org.apache.aurora.gen.TierConfig("reserved", RESERVED_TIER.toMap())
     );
   }
 }
