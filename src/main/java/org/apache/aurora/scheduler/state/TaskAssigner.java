@@ -43,7 +43,6 @@ import org.apache.aurora.scheduler.filter.SchedulingFilter.VetoGroup;
 import org.apache.aurora.scheduler.offers.OfferManager;
 import org.apache.aurora.scheduler.resources.ResourceManager;
 import org.apache.aurora.scheduler.resources.ResourceType;
-import org.apache.aurora.scheduler.storage.Storage.StoreProvider;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
 import org.apache.mesos.Protos;
@@ -97,7 +96,6 @@ public interface TaskAssigner {
     private final SchedulingFilter filter;
     private final OfferManager offerManager;
     private final TierManager tierManager;
-    private final StoreProvider storeProvider;
     private final Map<String, Integer> taskIdToStartTime = Maps.newHashMap();
 
     @Inject
@@ -106,8 +104,7 @@ public interface TaskAssigner {
         SchedulingFilter filter,
         OfferManager offerManager,
         TierManager tierManager,
-        StatsProvider statsProvider,
-        StoreProvider storeProvider) {
+        StatsProvider statsProvider) {
 
       this.stateManager = requireNonNull(stateManager);
       this.filter = requireNonNull(filter);
@@ -116,7 +113,6 @@ public interface TaskAssigner {
 
       this.launchFailures = statsProvider.makeCounter(ASSIGNER_LAUNCH_FAILURES);
       this.evaluatedOffers = statsProvider.makeCounter(ASSIGNER_EVALUATED_OFFERS);
-      this.storeProvider = requireNonNull(storeProvider);
     }
 
     @VisibleForTesting
@@ -232,7 +228,7 @@ public interface TaskAssigner {
     }
 
     private boolean skipThisOffer(TierInfo tierInfo, ResourceRequest resourceRequest, String taskId,
-                                  HostOffer offer) {
+                                  HostOffer offer, MutableStoreProvider storeProvider) {
       boolean skip = false;
 
       if (tierInfo.isReserved()) {
@@ -288,7 +284,7 @@ public interface TaskAssigner {
 
         // Need to differentiate b/n an Offer that just needs to launch a task versus one that
         // we need to reserve resources for. Is this true?
-        if (skipThisOffer(tierInfo, resourceRequest, taskId, offer)) {
+        if (skipThisOffer(tierInfo, resourceRequest, taskId, offer, storeProvider)) {
           // Skipping because we require a dynamic reservation and this offer doesn't match our reqs.
           continue;
         }

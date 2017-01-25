@@ -32,6 +32,8 @@ import org.apache.aurora.scheduler.base.Tasks;
 import org.apache.aurora.scheduler.events.PubsubEvent.DriverDisconnected;
 import org.apache.aurora.scheduler.events.PubsubEvent.HostAttributesChanged;
 import org.apache.aurora.scheduler.mesos.Driver;
+import org.apache.aurora.scheduler.mesos.DriverSettings;
+import org.apache.aurora.scheduler.mesos.MesosTaskFactory.MesosTaskFactoryImpl;
 import org.apache.aurora.scheduler.offers.OfferManager.OfferManagerImpl;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
@@ -100,6 +102,8 @@ public class OfferManagerImplTest extends EasyMockTest {
   private FakeScheduledExecutor clock;
   private OfferManagerImpl offerManager;
   private FakeStatsProvider statsProvider;
+  private MesosTaskFactoryImpl taskFactory;
+  private DriverSettings driverSettings;
 
   @Before
   public void setUp() {
@@ -111,7 +115,9 @@ public class OfferManagerImplTest extends EasyMockTest {
         Amount.of(OFFER_FILTER_SECONDS, Time.SECONDS),
         () -> RETURN_DELAY);
     statsProvider = new FakeStatsProvider();
-    offerManager = new OfferManagerImpl(driver, offerSettings, statsProvider, executorMock);
+    taskFactory = createMock(MesosTaskFactoryImpl.class);
+    driverSettings = new DriverSettings();
+    offerManager = new OfferManagerImpl(driver, offerSettings, statsProvider, taskFactory, executorMock);
   }
 
   @Test
