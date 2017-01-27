@@ -19,6 +19,7 @@ import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
 import org.apache.aurora.scheduler.events.PubsubEvent;
 import org.apache.aurora.scheduler.offers.OfferManager;
+import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.mesos.Protos;
 
 public class FakeOfferManager implements OfferManager {
@@ -33,7 +34,7 @@ public class FakeOfferManager implements OfferManager {
   }
 
   @Override
-  public void launchTask(Protos.OfferID offerId, Protos.TaskInfo taskInfo) throws LaunchException {
+  public void launchTask(Protos.Offer offer, IAssignedTask iAssignedTask, boolean reserved) throws LaunchException {
     // no-op
   }
 

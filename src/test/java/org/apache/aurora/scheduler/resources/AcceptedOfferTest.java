@@ -89,7 +89,7 @@ public class AcceptedOfferTest {
         mesosRange(PORTS, role, TASK_PORTS));
 
     AcceptedOffer offerAllocation = AcceptedOffer.create(
-        offer, TASK, EXECUTOR_BAG, new TierInfo(false, revocable));
+        offer, TASK, EXECUTOR_BAG, new TierInfo(false, revocable, false));
 
     ResourceBag bag = bagFromResources(TASK.getTask().getResources());
     Set<Resource> taskResources = ImmutableSet.<Resource>builder()
@@ -127,7 +127,7 @@ public class AcceptedOfferTest {
         mesosRange(PORTS, TEST_ROLE, TASK_PORTS));
 
     AcceptedOffer offerAllocation = AcceptedOffer.create(
-        offer, TASK, EXECUTOR_BAG, new TierInfo(false, revocable));
+        offer, TASK, EXECUTOR_BAG, new TierInfo(false, revocable, false));
 
     Set<Resource> taskSet = ImmutableSet.<Resource>builder()
         .add(mesosScalar(CPUS, TEST_ROLE, revocable, EXECUTOR_BAG.valueOf(CPUS)))

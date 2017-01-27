@@ -24,19 +24,19 @@ import org.apache.aurora.scheduler.storage.entities.ITaskConfig;
 import org.junit.Test;
 
 import static org.apache.aurora.scheduler.TierModule.parseTierConfig;
-import static org.apache.aurora.scheduler.base.TaskTestUtil.DEV_TIER;
-import static org.apache.aurora.scheduler.base.TaskTestUtil.PREFERRED_TIER;
-import static org.apache.aurora.scheduler.base.TaskTestUtil.REVOCABLE_TIER;
+import static org.apache.aurora.scheduler.base.TaskTestUtil.*;
 import static org.junit.Assert.assertEquals;
 
 public class TierManagerTest {
   private static final String PREFERRED_TIER_NAME = "preferred";
   private static final String PREEMPTIBLE_TIER_NAME = "preemptible";
   private static final String REVOCABLE_TIER_NAME = "revocable";
+  private static final String RESERVED_TIER_NAME = "reserved";
   private static final Map<String, TierInfo> TIERS = ImmutableMap.of(
       PREFERRED_TIER_NAME, PREFERRED_TIER,
       PREEMPTIBLE_TIER_NAME, DEV_TIER,
-      REVOCABLE_TIER_NAME, REVOCABLE_TIER);
+      REVOCABLE_TIER_NAME, REVOCABLE_TIER,
+      RESERVED_TIER_NAME, RESERVED_TIER);
   private static final TierManager TIER_MANAGER = new TierManagerImpl(
       parseTierConfig(TaskTestUtil.tierConfigFile()));
 
@@ -45,6 +45,13 @@ public class TierManagerTest {
     assertEquals(
         REVOCABLE_TIER,
         TIER_MANAGER.getTier(ITaskConfig.build(new TaskConfig().setTier(REVOCABLE_TIER_NAME))));
+  }
+
+  @Test
+  public void testGetTierReserved() {
+    assertEquals(
+        RESERVED_TIER,
+        TIER_MANAGER.getTier(ITaskConfig.build(new TaskConfig().setTier(RESERVED_TIER_NAME))));
   }
 
   @Test

@@ -90,10 +90,10 @@ public class ResourceManagerTest {
         ImmutableSet.copyOf(ResourceManager.getRevocableOfferResources(offer)));
     assertEquals(
         ImmutableSet.of(resource1, resource3),
-        ImmutableSet.copyOf(ResourceManager.getOfferResources(offer, new TierInfo(false, false))));
+        ImmutableSet.copyOf(ResourceManager.getOfferResources(offer, new TierInfo(false, false, false))));
     assertEquals(
         ImmutableSet.of(resource2, resource3),
-        ImmutableSet.copyOf(ResourceManager.getOfferResources(offer, new TierInfo(false, true))));
+        ImmutableSet.copyOf(ResourceManager.getOfferResources(offer, new TierInfo(false, true, false))));
   }
 
   @Test

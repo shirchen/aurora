@@ -193,9 +193,10 @@ public final class TaskTestUtil {
   public static String tierConfigFile() {
     return "{\"default\": \"preemptible\","
         + "\"tiers\":{"
-        + "\"preferred\": {\"revocable\": false, \"preemptible\": false},"
-        + "\"preemptible\": {\"revocable\": false, \"preemptible\": true},"
-        + "\"revocable\": {\"revocable\": true, \"preemptible\": true}"
+        + "\"preferred\": {\"revocable\": false, \"preemptible\": false, \"reserved\": false},"
+        + "\"preemptible\": {\"revocable\": false, \"preemptible\": true, \"reserved\": false},"
+        + "\"revocable\": {\"revocable\": true, \"preemptible\": true, \"reserved\": false},"
+        + "\"reserved\": {\"revocable\": false, \"preemptible\": false, \"reserved\": true}"
         + "}}";
   }
 

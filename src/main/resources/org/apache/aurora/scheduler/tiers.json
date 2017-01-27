@@ -5,17 +5,32 @@
     "preferred":
     {
       "preemptible": false,
-      "revocable": false
+      "revocable": false,
+      "reserved": false
     },
     "preemptible":
     {
       "preemptible": true,
-      "revocable": false
+      "revocable": false,
+      "reserved": false
     },
     "revocable":
     {
       "preemptible": true,
-      "revocable": true
+      "revocable": true,
+      "reserved": false
+    },
+    "reserved":
+    {
+      "preemptible": false,
+      "revocable": false,
+      "reserved": true
+    },
+    "reserved-nonprod":
+    {
+      "preemptible": true,
+      "revocable": false,
+      "reserved": true
     }
   }
 }

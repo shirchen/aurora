@@ -17,17 +17,18 @@ import java.util.List;
 
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 
 import org.apache.aurora.common.quantity.Amount;
 import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.common.testing.easymock.EasyMockTest;
-import org.apache.aurora.gen.HostAttributes;
-import org.apache.aurora.gen.MaintenanceMode;
+import org.apache.aurora.gen.*;
 import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.async.DelayExecutor;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
+import org.apache.aurora.scheduler.base.TaskTestUtil;
 import org.apache.aurora.scheduler.base.Tasks;
 import org.apache.aurora.scheduler.events.PubsubEvent.DriverDisconnected;
 import org.apache.aurora.scheduler.events.PubsubEvent.HostAttributesChanged;
@@ -35,8 +36,10 @@ import org.apache.aurora.scheduler.mesos.Driver;
 import org.apache.aurora.scheduler.mesos.DriverSettings;
 import org.apache.aurora.scheduler.mesos.MesosTaskFactory.MesosTaskFactoryImpl;
 import org.apache.aurora.scheduler.offers.OfferManager.OfferManagerImpl;
+import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 import org.apache.aurora.scheduler.storage.entities.IScheduledTask;
+import org.apache.aurora.scheduler.storage.entities.ITaskConfig;
 import org.apache.aurora.scheduler.testing.FakeScheduledExecutor;
 import org.apache.aurora.scheduler.testing.FakeStatsProvider;
 import org.apache.mesos.Protos;
@@ -56,6 +59,7 @@ import static org.apache.aurora.scheduler.offers.OfferManager.OfferManagerImpl.S
 import static org.apache.aurora.scheduler.resources.ResourceTestUtil.mesosRange;
 import static org.apache.aurora.scheduler.resources.ResourceTestUtil.offer;
 import static org.apache.aurora.scheduler.resources.ResourceType.PORTS;
+import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -88,6 +92,18 @@ public class OfferManagerImplTest extends EasyMockTest {
       .setTaskId(Protos.TaskID.newBuilder().setValue(Tasks.id(TASK)))
       .setSlaveId(MESOS_OFFER.getSlaveId())
       .build();
+
+  private static final ITaskConfig TASK_CONFIG = ITaskConfig.build(
+      TaskTestUtil.makeConfig(TaskTestUtil.JOB)
+          .newBuilder()
+          .setContainer(Container.mesos(new MesosContainer())));
+
+  private static final IAssignedTask ASSIGNED_TASK = IAssignedTask.build(new AssignedTask()
+      .setInstanceId(2)
+      .setTaskId("task-id")
+      .setAssignedPorts(ImmutableMap.of("http", 80))
+      .setTask(TASK_CONFIG.newBuilder()));
+
   private static Operation launch = Operation.newBuilder()
       .setType(Operation.Type.LAUNCH)
       .setLaunch(Operation.Launch.newBuilder().addTaskInfos(TASK_INFO))
@@ -116,8 +132,14 @@ public class OfferManagerImplTest extends EasyMockTest {
         () -> RETURN_DELAY);
     statsProvider = new FakeStatsProvider();
     taskFactory = createMock(MesosTaskFactoryImpl.class);
-    driverSettings = new DriverSettings();
-    offerManager = new OfferManagerImpl(driver, offerSettings, statsProvider, taskFactory, executorMock);
+    driverSettings = new DriverSettings("fakemaster",
+        Optional.absent(),
+        Protos.FrameworkInfo.newBuilder()
+            .setUser("framework user")
+            .setName("test framework")
+            .build());
+    offerManager = new OfferManagerImpl(
+        driver, offerSettings, statsProvider, taskFactory, executorMock, driverSettings);
   }
 
   @Test
@@ -126,7 +148,7 @@ public class OfferManagerImplTest extends EasyMockTest {
 
     HostOffer offerA = setMode(OFFER_A, DRAINING);
     HostOffer offerC = setMode(OFFER_C, DRAINING);
-
+    expect(taskFactory.createFrom(ASSIGNED_TASK, OFFER_B.getOffer())).andReturn(TASK_INFO);
     driver.acceptOffers(OFFER_B.getOffer().getId(), OPERATIONS, OFFER_FILTER);
     expectLastCall();
 
@@ -146,7 +168,7 @@ public class OfferManagerImplTest extends EasyMockTest {
     assertEquals(
         ImmutableSet.of(OFFER_B, offerA, offerC),
         ImmutableSet.copyOf(offerManager.getOffers()));
-    offerManager.launchTask(OFFER_B.getOffer().getId(), TASK_INFO);
+    offerManager.launchTask(OFFER_B.getOffer(), ASSIGNED_TASK, false);
     assertEquals(2L, statsProvider.getLongValue(OUTSTANDING_OFFERS));
     clock.advance(RETURN_DELAY);
     assertEquals(0L, statsProvider.getLongValue(OUTSTANDING_OFFERS));
@@ -293,6 +315,7 @@ public class OfferManagerImplTest extends EasyMockTest {
 
   @Test(expected = OfferManager.LaunchException.class)
   public void testAcceptOffersDriverThrows() throws OfferManager.LaunchException {
+    expect(taskFactory.createFrom(ASSIGNED_TASK, OFFER_A.getOffer())).andReturn(TASK_INFO);
     driver.acceptOffers(OFFER_A_ID, OPERATIONS, OFFER_FILTER);
     expectLastCall().andThrow(new IllegalStateException());
 
@@ -301,7 +324,7 @@ public class OfferManagerImplTest extends EasyMockTest {
     offerManager.addOffer(OFFER_A);
 
     try {
-      offerManager.launchTask(OFFER_A_ID, TASK_INFO);
+      offerManager.launchTask(OFFER_A.getOffer(), ASSIGNED_TASK, false);
     } finally {
       clock.advance(RETURN_DELAY);
     }
@@ -309,9 +332,11 @@ public class OfferManagerImplTest extends EasyMockTest {
 
   @Test
   public void testLaunchTaskOfferRaceThrows() {
+    expect(taskFactory.createFrom(ASSIGNED_TASK, OFFER_A.getOffer())).andReturn(TASK_INFO);
+    expectLastCall();
     control.replay();
     try {
-      offerManager.launchTask(OFFER_A_ID, TASK_INFO);
+      offerManager.launchTask(OFFER_A.getOffer(), ASSIGNED_TASK, false);
       fail("Method invocation is expected to throw exception.");
     } catch (OfferManager.LaunchException e) {
       assertEquals(1L, statsProvider.getLongValue(OFFER_ACCEPT_RACES));
@@ -348,4 +373,7 @@ public class OfferManagerImplTest extends EasyMockTest {
         offer.getOffer(),
         IHostAttributes.build(offer.getAttributes().newBuilder().setMode(mode)));
   }
+
+  // TODO: Add hella tests
+
 }
