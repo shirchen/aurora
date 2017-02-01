@@ -96,6 +96,8 @@ public class SchedulingBenchmarks {
   @State(Scope.Thread)
   public abstract static class AbstractBase {
     private static final Amount<Long, Time> NO_DELAY = Amount.of(1L, Time.MILLISECONDS);
+    private static final Amount<Long, Time> MAX_RESERVED_OFFER_WAIT_TIME = Amount.of(
+        60L, Time.SECONDS);
     private static final Amount<Long, Time> DELAY_FOREVER = Amount.of(30L, Time.DAYS);
     private static final Integer BATCH_SIZE = 5;
     protected Storage storage;
@@ -140,7 +142,8 @@ public class SchedulingBenchmarks {
               bind(OfferManager.class).to(OfferManager.OfferManagerImpl.class);
               bind(OfferManager.OfferManagerImpl.class).in(Singleton.class);
               bind(OfferSettings.class).toInstance(
-                  new OfferSettings(NO_DELAY, () -> DELAY_FOREVER));
+                  new OfferSettings(NO_DELAY, MAX_RESERVED_OFFER_WAIT_TIME,
+                      () -> DELAY_FOREVER));
               bind(BiCache.BiCacheSettings.class).toInstance(
                   new BiCache.BiCacheSettings(DELAY_FOREVER, ""));
               bind(TaskScheduler.class).to(TaskScheduler.TaskSchedulerImpl.class);

@@ -29,6 +29,7 @@ import com.google.common.collect.Iterables;
 
 import com.google.common.collect.Maps;
 import org.apache.aurora.common.inject.TimedInterceptor.Timed;
+import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.common.stats.StatsProvider;
 import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.TierInfo;
@@ -151,8 +152,7 @@ public interface TaskAssigner {
 
       long timeSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
       Integer timeNow =  (int)timeSeconds;
-      // TODO: Wire this up as an optional argument.
-      if (timeNow > startedToWaitAt + 60*1) {
+      if (timeNow > startedToWaitAt + offerManager.getReservedOfferWait().as(Time.SECONDS)) {
         enoughWaiting = true;
       }
       return enoughWaiting;
@@ -172,9 +172,10 @@ public interface TaskAssigner {
           String taskName = JobKeys.canonicalString(
               resourceRequest.getTask().getJob()) + "/" + instanceId;
           LOG.info(
-              "Task name extracted from task about to be scheduled is " + taskName + " while label is " + labelValue);
+              "Task name extracted from task about to be scheduled is " + taskName +
+                  " while label is " + labelValue);
           if (labelValue.equals(taskName)) {
-            LOG.info("Found our reservation");
+            LOG.debug("Found reservation for task " + taskName);
             found = true;
             break;
           }
@@ -183,44 +184,6 @@ public interface TaskAssigner {
       return found;
     }
 
-//    private boolean reallySkipOffer(TierInfo tierInfo) {
-//      boolean skip = false;
-//      if (tierInfo.isReserved()) {
-//        //placeholder: see if task exists inside reservation store. assuming that yes until we
-//        // implement that part.
-//        skip = true;
-//      } else {
-//        skip = false;
-//      }
-//     return skip;
-//    }
-//
-    // Mindfully commented out to be optionally put in later.
-//    private boolean isInsideReservationStore(IAssignedTask assignedTask, String taskName) {
-//    boolean alreadyReserved  = false;
-//    String taskName3 = taskName + "/" + assignedTask.getInstanceId();
-//    if (storeProvider.getReservationStore().fetchReservedTasks().contains(taskName3)) {
-//      alreadyReserved = true;
-//     }
-//
-//      return alreadyReserved;
-//    }
-
-//    private boolean runningAsReserved(ResourceRequest resourceRequest, String taskId) {
-//      boolean alreadyRunning = false;
-//      String taskName2 = JobKeys.canonicalString(resourceRequest.getTask().getJob());
-//      Optional<IScheduledTask> scheduledTask = storeProvider.getTaskStore().fetchTask(taskId);
-//
-//      if (scheduledTask.isPresent()) {
-//        IAssignedTask assignedTask = scheduledTask.get().getAssignedTask();
-//        if (isInsideReservationStore(assignedTask, taskName2)) {
-//          alreadyRunning = true;
-//        }
-//      }
-//
-//      return alreadyRunning;
-//    }
-
     @VisibleForTesting
     void startTiming(String taskId) {
       long timeMillis = System.currentTimeMillis();
@@ -228,27 +191,33 @@ public interface TaskAssigner {
       this.taskIdToStartTime.putIfAbsent(taskId, (int) timeSeconds);
     }
 
-    @VisibleForTesting
-    boolean skipThisOffer(TierInfo tierInfo, ResourceRequest resourceRequest, String taskId,
-                                  HostOffer offer, MutableStoreProvider storeProvider) {
-      boolean skip = false;
-
+    private Optional<IAssignedTask> findAssignedReservedTask(TierInfo tierInfo, String taskId,
+                                                             MutableStoreProvider storeProvider) {
+      IAssignedTask assignedTask = null;
       if (tierInfo.isReserved()) {
         Optional<IScheduledTask> scheduledTask = storeProvider.getTaskStore().fetchTask(taskId);
         if (scheduledTask.isPresent()) {
-          IAssignedTask assignedTask = scheduledTask.get().getAssignedTask();
-          startTiming(taskId);
-          // We must look for reserved offer and skip non-reserved ones.
-          boolean found = hasReservedResourcesInsideOfferForTask(resourceRequest, offer, assignedTask.getInstanceId());
-          if (!found && !waitedLongEnough(taskId)) {
-            // We did not find our offer nor waited long enough so continue looking for it.
-            skip = true;
-          }
+          assignedTask = scheduledTask.get().getAssignedTask();
+        }
+      }
+      return Optional.fromNullable(assignedTask);
+    }
+
+    @VisibleForTesting
+    boolean skipThisOffer(ResourceRequest resourceRequest, String taskId, HostOffer offer,
+                          Optional<IAssignedTask> iAssignedTask) {
+      boolean skip = false;
+      if (iAssignedTask.isPresent()) {
+        startTiming(taskId);
+        boolean found = hasReservedResourcesInsideOfferForTask(
+            resourceRequest, offer, iAssignedTask.get().getInstanceId());
+        if (!found && !waitedLongEnough(taskId)) {
+          // We did not find our offer nor waited long enough so continue looking for it.
+          skip = true;
         }
       }
       // If skip is still false then we did not find our reserved resources or did not wait long
       // enough.
-
       return skip;
     }
 
@@ -284,21 +253,22 @@ public interface TaskAssigner {
         Set<Veto> vetoes = filter.filter(
             new UnusedResource(offer.getResourceBag(tierInfo), offer.getAttributes()), resourceRequest);
 
-        // Need to differentiate b/n an Offer that just needs to launch a task versus one that
-        // we need to reserve resources for. Is this true?
-        if (skipThisOffer(tierInfo, resourceRequest, taskId, offer, storeProvider)) {
-          // Skipping because we require a dynamic reservation and this offer doesn't match our reqs.
-          continue;
-        }
-
         boolean launchWithReserved = false;
-        // Launch a reserved task with found resources.
         if (tierInfo.isReserved()) {
-          Optional<IScheduledTask> scheduledTask = storeProvider.getTaskStore().fetchTask(taskId);
-          if (scheduledTask.isPresent()) {
-            IAssignedTask assignedTask = scheduledTask.get().getAssignedTask();
+          // Need to find task to lookup its instanceId.
+          Optional<IAssignedTask> iAssignedTask = findAssignedReservedTask(
+              tierInfo, taskId, storeProvider);
+          // Need to differentiate b/n an Offer that just needs to launch a task versus one that
+          // we need to reserve resources for. Is this true?
+          if (skipThisOffer(resourceRequest, taskId, offer, iAssignedTask)) {
+            // Skipping because we require a dynamic reservation and this offer doesn't match our
+            // requirements.
+            continue;
+          }
+          // Launch a reserved task with found resources.
+          if (iAssignedTask.isPresent()) {
             launchWithReserved = hasReservedResourcesInsideOfferForTask(
-                resourceRequest, offer, assignedTask.getInstanceId());
+                resourceRequest, offer, iAssignedTask.get().getInstanceId());
           }
         }
 

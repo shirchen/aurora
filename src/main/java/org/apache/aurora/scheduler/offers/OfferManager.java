@@ -33,6 +33,7 @@ import com.google.common.collect.Ordering;
 import com.google.common.eventbus.Subscribe;
 
 import org.apache.aurora.common.inject.TimedInterceptor.Timed;
+import org.apache.aurora.common.quantity.Amount;
 import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.common.stats.StatsProvider;
 import org.apache.aurora.gen.MaintenanceMode;
@@ -139,6 +140,15 @@ public interface OfferManager extends EventSubscriber {
    * @return A snapshot of all offers eligible for the given {@code groupKey}.
    */
   Iterable<HostOffer> getOffers(TaskGroupKey groupKey);
+
+
+  /**
+   * Amount of time to wait for an offer with labeled resources to come back before picking a new
+   * offer to reschedule a task.
+   *
+   * @return A long in seconds.
+   */
+  Amount<Long, Time> getReservedOfferWait();
 
   /**
    * Gets an offer for the given slave ID.
@@ -342,6 +352,9 @@ public interface OfferManager extends EventSubscriber {
     public Optional<HostOffer> getOffer(SlaveID slaveId) {
       return hostOffers.get(slaveId);
     }
+
+    @Override
+    public Amount<Long, Time> getReservedOfferWait() { return offerSettings.getReservedOfferWait();}
 
     /**
      * Updates the preference of a host's offers.

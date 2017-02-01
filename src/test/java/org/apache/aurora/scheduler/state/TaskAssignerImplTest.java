@@ -17,11 +17,11 @@ import java.util.Map;
 import java.util.Set;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
-import jdk.nashorn.internal.ir.annotations.Immutable;
+import org.apache.aurora.common.quantity.Amount;
+import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.common.testing.easymock.EasyMockTest;
 import org.apache.aurora.gen.*;
 import org.apache.aurora.scheduler.HostOffer;
@@ -38,7 +38,6 @@ import org.apache.aurora.scheduler.filter.SchedulingFilter.UnusedResource;
 import org.apache.aurora.scheduler.filter.SchedulingFilter.Veto;
 import org.apache.aurora.scheduler.offers.OfferManager;
 import org.apache.aurora.scheduler.resources.ResourceBag;
-import org.apache.aurora.scheduler.scheduling.TaskGroup;
 import org.apache.aurora.scheduler.state.TaskAssigner.TaskAssignerImpl;
 import org.apache.aurora.scheduler.storage.TaskStore;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
@@ -51,8 +50,6 @@ import org.apache.mesos.Protos.FrameworkID;
 import org.apache.mesos.Protos.OfferID;
 import org.apache.mesos.Protos.Resource;
 import org.apache.mesos.Protos.SlaveID;
-import org.apache.mesos.Protos.TaskID;
-import org.apache.mesos.Protos.TaskInfo;
 import org.apache.mesos.Protos.Value.Range;
 import org.apache.mesos.Protos.Value.Ranges;
 import org.apache.mesos.Protos.Value.Type;
@@ -133,6 +130,13 @@ public class TaskAssignerImplTest extends EasyMockTest {
       bagFromMesosResources(MESOS_OFFER.getResourcesList()),
       OFFER.getAttributes());
 
+
+  // To be reused for Dynamic Reservation
+
+  private static final String TASK_ID = "reserved_id";
+  private static final IScheduledTask SCHEDULED_TASK =  makeTask(
+      TASK_ID, JobKeys.from("role", "dev", "job"));
+
   private static final String TASK_NAME = "role/dev/job/2";
 //  private static final IScheduledTask RESERVED_TASK = makeTask(TASK_NAME, JOB);
   private static final Offer MESOS_OFFER_WITH_RESERVED_RESOURCES = offer(
@@ -196,6 +200,10 @@ public class TaskAssignerImplTest extends EasyMockTest {
                       Ranges.newBuilder().addRange(Range.newBuilder().setBegin(PORT).setEnd(PORT))))
           .build(),
       IHostAttributes.build(new HostAttributes()));
+  private static final UnusedResource RESERVE_UNUSED_DIFFERENT = new UnusedResource(
+      bagFromMesosResources(MESOS_OFFER_WITH_RESERVED_RESOURCES.getResourcesList()),
+      OFFER_WITH_DIFFERENT_RESERVATION.getAttributes());
+  private static final Amount<Long, Time> MAX_WAIT_TIME = Amount.of(30L, Time.SECONDS);
 
   private static final Set<String> NO_ASSIGNMENT = ImmutableSet.of();
 
@@ -241,11 +249,32 @@ public class TaskAssignerImplTest extends EasyMockTest {
 
   @Test
   public void testAssignNoTasksReserved() throws Exception {
+    // Our offer does not have resources reserved for this task.
+    TaskGroupKey taskGroupKey = TaskGroupKey.from(SCHEDULED_TASK.getAssignedTask().getTask());
+    ResourceRequest resourceRequest = new ResourceRequest(
+        TASK.getAssignedTask().getTask(), ResourceBag.EMPTY, empty());
+
+    expect(tierManager.getTier(SCHEDULED_TASK.getAssignedTask().getTask())).andReturn(RESERVED_TIER);
+    expect(offerManager.getOffers(taskGroupKey)).andReturn(ImmutableSet.of(
+        OFFER_WITH_DIFFERENT_RESERVATION));
+    expect(offerManager.getReservedOfferWait()).andReturn(MAX_WAIT_TIME);
+    expect(filter.filter(RESERVE_UNUSED_DIFFERENT, resourceRequest)).andReturn(ImmutableSet.of());
+
+    TaskStore taskStore = createMock(TaskStore.class);
+    expect(storeProvider.getTaskStore()).andReturn(taskStore);
+    expect(taskStore.fetchTask(TASK_ID)).andReturn(Optional.of(SCHEDULED_TASK));
+
     control.replay();
 
     assertEquals(
         NO_ASSIGNMENT,
-        assigner.maybeAssign(storeProvider, null, null, ImmutableSet.of(), null));
+        assigner.maybeAssign(
+            storeProvider,
+            resourceRequest,
+            taskGroupKey,
+            ImmutableSet.of(Tasks.id(SCHEDULED_TASK), "id2", "id3"),
+            ImmutableMap.of(SLAVE_ID, GROUP_KEY))
+    );
   }
 
   @Test
@@ -276,39 +305,38 @@ public class TaskAssignerImplTest extends EasyMockTest {
   @Test
   public void testAssignPartialNoVetoesReserved() throws Exception {
 
-    String taskId = "reserved_id";
-    IScheduledTask scheduledTask =  makeTask(taskId, JobKeys.from("role", "dev", "job"));
+//    String taskId = "reserved_id";
+//    IScheduledTask scheduledTask =  makeTask(taskId, JobKeys.from("role", "dev", "job"));
 
-    TaskGroupKey groupKey =  TaskGroupKey.from(scheduledTask.getAssignedTask().getTask());
+    TaskGroupKey groupKey =  TaskGroupKey.from(SCHEDULED_TASK.getAssignedTask().getTask());
 
     expect(offerManager.getOffers(groupKey)).andReturn(ImmutableSet.of(OFFER_WITH_RESERVATION));
 
-    expect(tierManager.getTier(scheduledTask.getAssignedTask().getTask())).andReturn(RESERVED_TIER);
+    expect(tierManager.getTier(SCHEDULED_TASK.getAssignedTask().getTask())).andReturn(RESERVED_TIER);
     expect(filter.filter(RESERVE_UNUSED, resourceRequest)).andReturn(ImmutableSet.of());
 
+    //TODO: look into this, why do we call fetchTask twice
     TaskStore taskStore = createMock(TaskStore.class);
     expect(storeProvider.getTaskStore()).andReturn(taskStore);
-    expect(taskStore.fetchTask(taskId)).andReturn(Optional.of(scheduledTask));
-    expect(storeProvider.getTaskStore()).andReturn(taskStore);
-    expect(taskStore.fetchTask(taskId)).andReturn(Optional.of(scheduledTask));
+    expect(taskStore.fetchTask(TASK_ID)).andReturn(Optional.of(SCHEDULED_TASK));
 
-    expectAssignReservedTask(MESOS_OFFER_WITH_RESERVED_RESOURCES, scheduledTask);
+    expectAssignTask(MESOS_OFFER_WITH_RESERVED_RESOURCES, SCHEDULED_TASK);
 
     offerManager.launchTask(
         MESOS_OFFER_WITH_RESERVED_RESOURCES, IAssignedTask.build(
-            scheduledTask.getAssignedTask().newBuilder()), false);
+            SCHEDULED_TASK.getAssignedTask().newBuilder()), false);
 
     control.replay();
 
     AttributeAggregate aggregate = empty();
     assertEquals(0L, statsProvider.getLongValue(ASSIGNER_EVALUATED_OFFERS));
     assertEquals(
-        ImmutableSet.of(Tasks.id(scheduledTask)),
+        ImmutableSet.of(Tasks.id(SCHEDULED_TASK)),
         assigner.maybeAssign(
             storeProvider,
-            new ResourceRequest(scheduledTask.getAssignedTask().getTask(), ResourceBag.EMPTY, aggregate),
-            TaskGroupKey.from(scheduledTask.getAssignedTask().getTask()),
-            ImmutableSet.of(Tasks.id(scheduledTask), "id2", "id3"),
+            new ResourceRequest(SCHEDULED_TASK.getAssignedTask().getTask(), ResourceBag.EMPTY, aggregate),
+            TaskGroupKey.from(SCHEDULED_TASK.getAssignedTask().getTask()),
+            ImmutableSet.of(Tasks.id(SCHEDULED_TASK), "id2", "id3"),
             ImmutableMap.of(RESERVATION_SLAVE_ID, groupKey)
         )
     );
@@ -531,50 +559,38 @@ public class TaskAssignerImplTest extends EasyMockTest {
 
   @Test
   public void testDoNotSkipOffer() {
-    TaskStore taskStore = createMock(TaskStore.class);
-    expect(storeProvider.getTaskStore()).andReturn(taskStore);
-    expect(taskStore.fetchTask(TASK_NAME)).andReturn(Optional.of(TASK));
-
     control.replay();
     // This offer matches our asks: it's resources have the correct label.
     boolean out = assigner.skipThisOffer(
-        new TierInfo(false, false, true),
         resourceRequest,
         TASK_NAME,
         OFFER_WITH_RESERVATION,
-        storeProvider
+        Optional.fromNullable(ASSIGNED_TASK)
     );
     assertEquals(out, false);
   }
 
   @Test
   public void testSkipOffer() {
-    TaskStore taskStore = createMock(TaskStore.class);
-    expect(storeProvider.getTaskStore()).andReturn(taskStore);
-    expect(taskStore.fetchTask("foo")).andReturn(Optional.of(TASK));
+    expect(offerManager.getReservedOfferWait()).andReturn(MAX_WAIT_TIME);
 
     control.replay();
     // Offer's resources do not have a correct label.
     boolean out = assigner.skipThisOffer(
-        new TierInfo(false , false , true ),
         resourceRequest,
-        "foo", OFFER_WITH_DIFFERENT_RESERVATION,
-        storeProvider
+        "foo",
+        OFFER_WITH_DIFFERENT_RESERVATION,
+        Optional.fromNullable(ASSIGNED_TASK)
     );
     assertEquals(out, true);
   }
 
 
   private void expectAssignTask(Offer offer) {
-    expect(stateManager.assignTask(
-        eq(storeProvider),
-        eq(Tasks.id(TASK)),
-        eq(offer.getHostname()),
-        eq(offer.getSlaveId()),
-        anyObject())).andReturn(TASK.getAssignedTask());
+    expectAssignTask(offer, TASK);
   }
 
-  private void expectAssignReservedTask(Offer offer, IScheduledTask scheduledTask) {
+  private void expectAssignTask(Offer offer, IScheduledTask scheduledTask) {
     expect(stateManager.assignTask(
         eq(storeProvider),
         eq(Tasks.id(scheduledTask)),

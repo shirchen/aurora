@@ -115,6 +115,7 @@ public class OfferManagerImplTest extends EasyMockTest {
       .build();
   private static final List<Operation> OPERATIONS = ImmutableList.of(LAUNCH_OP);
   private static final long OFFER_FILTER_SECONDS = 0L;
+  private static final long MAX_RESERVED_OFFER_WAIT_TIME = 60L;
   private static final Filters OFFER_FILTER = Filters.newBuilder()
       .setRefuseSeconds(OFFER_FILTER_SECONDS)
       .build();
@@ -134,6 +135,7 @@ public class OfferManagerImplTest extends EasyMockTest {
     addTearDown(clock::assertEmpty);
     OfferSettings offerSettings = new OfferSettings(
         Amount.of(OFFER_FILTER_SECONDS, Time.SECONDS),
+        Amount.of(MAX_RESERVED_OFFER_WAIT_TIME, Time.SECONDS),
         () -> RETURN_DELAY);
     statsProvider = new FakeStatsProvider();
     taskFactory = createMock(MesosTaskFactoryImpl.class);

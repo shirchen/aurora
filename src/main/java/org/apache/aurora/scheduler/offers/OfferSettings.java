@@ -28,13 +28,14 @@ import static java.util.Objects.requireNonNull;
 public class OfferSettings {
 
   private final Amount<Long, Time> offerFilterDuration;
+  private final Amount<Long, Time> reservedOfferWait;
   private final Supplier<Amount<Long, Time>> returnDelaySupplier;
 
-  public OfferSettings(
-      Amount<Long, Time> offerFilterDuration,
-      Supplier<Amount<Long, Time>> returnDelaySupplier) {
+  public OfferSettings(Amount<Long, Time> offerFilterDuration, Amount<Long, Time> reservedOfferWait,
+                       Supplier<Amount<Long, Time>> returnDelaySupplier) {
 
     this.offerFilterDuration = requireNonNull(offerFilterDuration);
+    this.reservedOfferWait = requireNonNull(reservedOfferWait);
     this.returnDelaySupplier = requireNonNull(returnDelaySupplier);
   }
 
@@ -43,6 +44,13 @@ public class OfferSettings {
    */
   public Amount<Long, Time> getOfferFilterDuration() {
     return offerFilterDuration;
+  }
+
+  /**
+   * Maximum time to wait for an offer with labels for reserved resources to come back.
+   */
+  public Amount<Long, Time> getReservedOfferWait() {
+    return reservedOfferWait;
   }
 
   /**

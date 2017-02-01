@@ -43,6 +43,12 @@ public class OffersModule extends AbstractModule {
   private static final Arg<Amount<Integer, Time>> OFFER_HOLD_JITTER_WINDOW =
       Arg.create(Amount.of(1, Time.MINUTES));
 
+  @CmdLine(name = "max_reserved_offer_wait",
+      help = "Maximum amount of time to wait for an offer to come to reschedule a reserved task.")
+  @NotNegative
+  private static final Arg<Amount<Long, Time>> MAX_RESERVED_OFFER_WAIT_TIME =
+      Arg.create(Amount.of(60L, Time.SECONDS));
+
   @CmdLine(name = "offer_filter_duration",
       help = "Duration after which we expect Mesos to re-offer unused resources. A short duration "
           + "improves scheduling performance in smaller clusters, but might lead to resource "
@@ -58,10 +64,12 @@ public class OffersModule extends AbstractModule {
         bind(OfferSettings.class).toInstance(
             new OfferSettings(
                 OFFER_FILTER_DURATION.get(),
+                MAX_RESERVED_OFFER_WAIT_TIME.get(),
                 new RandomJitterReturnDelay(
                     MIN_OFFER_HOLD_TIME.get().as(Time.MILLISECONDS),
                     OFFER_HOLD_JITTER_WINDOW.get().as(Time.MILLISECONDS),
-                    Random.Util.newDefaultRandom())));
+                    Random.Util.newDefaultRandom()))
+        );
         bind(OfferManager.class).to(OfferManager.OfferManagerImpl.class);
         bind(OfferManager.OfferManagerImpl.class).in(Singleton.class);
         expose(OfferManager.class);
