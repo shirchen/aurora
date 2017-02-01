@@ -48,9 +48,14 @@ import org.apache.aurora.scheduler.mesos.MesosTaskFactory;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 import org.apache.mesos.Protos;
+import org.apache.mesos.Protos.Label;
+import org.apache.mesos.Protos.Labels;
+import org.apache.mesos.Protos.Offer;
 import org.apache.mesos.Protos.Offer.Operation;
 import org.apache.mesos.Protos.OfferID;
+import org.apache.mesos.Protos.Resource;
 import org.apache.mesos.Protos.SlaveID;
+import org.apache.mesos.Protos.TaskInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -205,65 +210,60 @@ public interface OfferManager extends EventSubscriber {
       this.driverSettings = requireNonNull(driverSettings);
     }
 
-    private static String constructTaskNameKey(Protos.TaskInfo task, IAssignedTask iAssignedTask) {
+    private static String constructTaskNameKey(TaskInfo task, IAssignedTask iAssignedTask) {
       // TODO: create utils to convert back 'n forth between task_name used inside labels
       // and other useful objects.
       return task.getName() + "/" + iAssignedTask.getInstanceId();
     }
 
-    private List<Protos.Resource> tagResourceListWithTaskName(
-        List<Protos.Resource> resourcesList, String taskNameInstanceId) {
+    private List<Resource> tagResourceListWithTaskName(
+        List<Resource> resourcesList, String taskNameInstanceId) {
 
       // TODO: How can I make this method better? I'm embarassed by my code.
-      List<Protos.Resource> reservedResourceList = new ArrayList<>();
-
-      for (Protos.Resource resource: resourcesList) {
-        List<Protos.Label> labels = new ArrayList<>();
-        labels.add(Protos.Label.newBuilder()
-            .setKey(TASKNAME_LABEL)
-            .setValue(taskNameInstanceId)
-            .build()
-        );
+      List<Resource> reservedResourceList = new ArrayList<>();
+      for (Resource resource: resourcesList) {
         reservedResourceList.add(
-            Protos.Resource.newBuilder(resource)
+            Resource.newBuilder(resource)
                 .setRole(driverSettings.getFrameworkInfo().getRole())
-                .setReservation(Protos.Resource.ReservationInfo.newBuilder()
+                .setReservation(Resource.ReservationInfo.newBuilder()
                     .setPrincipal(driverSettings.getFrameworkInfo().getPrincipal())
-                    .setLabels(Protos.Labels.newBuilder()
-                        .addAllLabels(labels).build())
-                )
-                .build()
-        );
+                    .setLabels(Labels.newBuilder()
+                        .addLabels(
+                            Label.newBuilder()
+                                .setKey(TASKNAME_LABEL)
+                                .setValue(taskNameInstanceId)
+                                .build())
+                        .build()
+                    )
+                ).build());
       }
       return reservedResourceList;
     }
 
-    private void reserveAndLaunchTask(Protos.Offer offer, IAssignedTask iAssignedTask) {
-      // This will sort our resources in the correct order and try to use the ones that have been
-      // reserved first.
-      Protos.TaskInfo task = taskFactory.createFrom(iAssignedTask, offer);
+    private void reserveAndLaunchTask(Offer offer, IAssignedTask iAssignedTask,
+                                      TaskInfo taskInfo) {
       OfferID offerId = offer.getId();
-      LOG.info("Reserved task getting launched is " + task.getName());
+      LOG.info("Reserved task getting launched is " + taskInfo.getName());
 
-      String taskNameInstanceId = OfferManagerImpl.constructTaskNameKey(task, iAssignedTask);
+      String taskNameInstanceId = OfferManagerImpl.constructTaskNameKey(taskInfo, iAssignedTask);
 
-      List<Protos.Resource> resourcesList = task.getResourcesList();
-      List<Protos.Resource> reservedResourceList = tagResourceListWithTaskName(
+      List<Resource> resourcesList = taskInfo.getResourcesList();
+      List<Resource> reservedResourceList = tagResourceListWithTaskName(
           resourcesList, taskNameInstanceId);
       // Rebuild the TaskInfo with tagged resources.
-      Protos.TaskInfo newTask = task.toBuilder().clearResources()
+      TaskInfo newTask = taskInfo.toBuilder().clearResources()
           .addAllResources(reservedResourceList).build();
       // RESERVE op
-      Operation reserve = Protos.Offer.Operation.newBuilder()
+      Operation reserve = Offer.Operation.newBuilder()
           .setType(Operation.Type.RESERVE)
           .setReserve(
-              Protos.Offer.Operation.Reserve.newBuilder().addAllResources(reservedResourceList)
+              Operation.Reserve.newBuilder().addAllResources(reservedResourceList)
           )
           .build();
       // LAUNCH op
-      Operation launch = Protos.Offer.Operation.newBuilder()
-          .setType(Protos.Offer.Operation.Type.LAUNCH)
-          .setLaunch(Protos.Offer.Operation.Launch.newBuilder()
+      Operation launch = Offer.Operation.newBuilder()
+          .setType(Offer.Operation.Type.LAUNCH)
+          .setLaunch(Offer.Operation.Launch.newBuilder()
               .addTaskInfos(newTask))
           .build();
 //  Placeholder for AURORA-181? which will add ReservationStore
@@ -461,7 +461,7 @@ public interface OfferManager extends EventSubscriber {
 
     @Timed("offer_manager_launch_task")
     @Override
-    public void launchTask(Protos.Offer offer, IAssignedTask iAssignedTask, boolean reserve)
+    public void launchTask(Offer offer, IAssignedTask iAssignedTask, boolean reserve)
         throws LaunchException {
       // Guard against an offer being removed after we grabbed it from the iterator.
       // If that happens, the offer will not exist in hostOffers, and we can immediately
@@ -469,16 +469,16 @@ public interface OfferManager extends EventSubscriber {
       // Removing while iterating counts on the use of a weakly-consistent iterator being used,
       // which is a feature of ConcurrentSkipListSet.
       OfferID offerId = offer.getId();
-      Protos.TaskInfo task = taskFactory.createFrom(iAssignedTask, offer);
+      TaskInfo taskInfo = taskFactory.createFrom(iAssignedTask, offer);
       if (hostOffers.remove(offerId)) {
         try {
           if (reserve) {
             // If we need to reserve resources then do this. Only happens the first time we launch
             // a task requiring reserved resources.
-            reserveAndLaunchTask(offer, iAssignedTask);
+            reserveAndLaunchTask(offer, iAssignedTask, taskInfo);
           } else {
             Operation launch = Operation.newBuilder().setType(Operation.Type.LAUNCH).setLaunch(
-                Operation.Launch.newBuilder().addTaskInfos(task)).build();
+                Operation.Launch.newBuilder().addTaskInfos(taskInfo)).build();
             driver.acceptOffers(offerId, ImmutableList.of(launch), getOfferFilter());
           }
         } catch (IllegalStateException e) {

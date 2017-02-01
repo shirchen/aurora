@@ -144,14 +144,13 @@ public interface TaskAssigner {
       return assigned;
     }
 
-    private boolean waitedLongEnough(String taskId) {
+    @VisibleForTesting
+    boolean waitedLongEnough(String taskId) {
       boolean enoughWaiting = false;
-      Integer startedToWaitAt = this.taskIdToStartTime.get(taskId);
+      Integer startedToWaitAt = taskIdToStartTime.get(taskId);
 
       long timeSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
       Integer timeNow =  (int)timeSeconds;
-//      LOG.info("Waited " + (timeNow - startedToWaitAt) + "secs");
-//      LOG.info("Map:" + this.taskIdToStartTime);
       // TODO: Wire this up as an optional argument.
       if (timeNow > startedToWaitAt + 60*1) {
         enoughWaiting = true;
@@ -159,7 +158,8 @@ public interface TaskAssigner {
       return enoughWaiting;
     }
 
-    private boolean hasReservedResourcesInsideOfferForTask(
+    @VisibleForTesting
+    boolean hasReservedResourcesInsideOfferForTask(
         ResourceRequest resourceRequest, HostOffer offer, int instanceId) {
       boolean found = false;
       List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
@@ -221,13 +221,15 @@ public interface TaskAssigner {
 //      return alreadyRunning;
 //    }
 
-    private void startTiming(String taskId) {
+    @VisibleForTesting
+    void startTiming(String taskId) {
       long timeMillis = System.currentTimeMillis();
       long timeSeconds = TimeUnit.MILLISECONDS.toSeconds(timeMillis);
       this.taskIdToStartTime.putIfAbsent(taskId, (int) timeSeconds);
     }
 
-    private boolean skipThisOffer(TierInfo tierInfo, ResourceRequest resourceRequest, String taskId,
+    @VisibleForTesting
+    boolean skipThisOffer(TierInfo tierInfo, ResourceRequest resourceRequest, String taskId,
                                   HostOffer offer, MutableStoreProvider storeProvider) {
       boolean skip = false;
 

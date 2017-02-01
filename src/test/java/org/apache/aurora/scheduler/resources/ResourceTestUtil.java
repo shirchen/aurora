@@ -102,6 +102,24 @@ public final class ResourceTestUtil {
     return mesosRange(type, Optional.absent(), values);
   }
 
+  public static Protos.Resource labelResource(Protos.Resource resource, String taskName) {
+    Protos.Label label = Protos.Label.newBuilder()
+        .setKey("task_name")
+        .setValue(taskName).build();
+
+    Protos.Resource.ReservationInfo reservationInfo =  Protos.Resource.ReservationInfo.newBuilder()
+        .setPrincipal("aurora")
+        .setLabels(Protos.Labels.newBuilder()
+            .addLabels(label).build()).build();
+
+    return Protos.Resource.newBuilder(resource)
+        .setRole("aurora-role")
+        .setReservation(reservationInfo)
+        .build();
+
+
+  }
+
   public static Protos.Resource mesosRange(
       ResourceType type,
       Optional<String> role,
