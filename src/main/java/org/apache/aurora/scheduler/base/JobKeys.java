@@ -111,7 +111,7 @@ public final class JobKeys {
    */
   public static IJobKey parse(String string) throws IllegalArgumentException {
     List<String> components = Splitter.on("/").splitToList(string);
-    checkArgument(components.size() == 3);
+    checkArgument(components.size() == 3 || components.size() == 4);
     return from(components.get(0), components.get(1), components.get(2));
   }
 

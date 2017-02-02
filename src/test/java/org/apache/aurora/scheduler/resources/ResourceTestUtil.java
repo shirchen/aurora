@@ -104,7 +104,7 @@ public final class ResourceTestUtil {
 
   public static Protos.Resource labelResource(Protos.Resource resource, String taskName) {
     Protos.Label label = Protos.Label.newBuilder()
-        .setKey("task_name")
+        .setKey("instance_key")
         .setValue(taskName).build();
 
     Protos.Resource.ReservationInfo reservationInfo =  Protos.Resource.ReservationInfo.newBuilder()

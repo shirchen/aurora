@@ -13,7 +13,11 @@
  */
 package org.apache.aurora.scheduler.offers;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -27,6 +31,7 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.Ordering;
@@ -40,6 +45,7 @@ import org.apache.aurora.gen.MaintenanceMode;
 import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.async.AsyncModule.AsyncExecutor;
 import org.apache.aurora.scheduler.async.DelayExecutor;
+import org.apache.aurora.scheduler.base.InstanceKeys;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
 import org.apache.aurora.scheduler.events.PubsubEvent.DriverDisconnected;
 import org.apache.aurora.scheduler.events.PubsubEvent.EventSubscriber;
@@ -48,6 +54,7 @@ import org.apache.aurora.scheduler.mesos.DriverSettings;
 import org.apache.aurora.scheduler.mesos.MesosTaskFactory;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
+import org.apache.aurora.scheduler.storage.entities.IInstanceKey;
 import org.apache.mesos.Protos;
 import org.apache.mesos.Protos.Label;
 import org.apache.mesos.Protos.Labels;
@@ -69,21 +76,10 @@ import static org.apache.aurora.gen.MaintenanceMode.SCHEDULED;
 import static org.apache.aurora.scheduler.events.PubsubEvent.HostAttributesChanged;
 
 
-
 /**
  * Tracks the Offers currently known by the scheduler.
  */
 public interface OfferManager extends EventSubscriber {
-
-  // add offerAdded type, OfferReconciliation imports offerAdded type.
-
-//  /**
-//   * Reserve the offer on behalf of the scheduler.
-//   *
-//   * @param offer Matched offer.
-//   * @param iAssignedTask Matched task info.
-//   */
-//  void reserveAndLaunchTask(Protos.Offer offer, IAssignedTask iAssignedTask);
 
   /**
    * Notifies the scheduler of a new resource offer.
@@ -181,7 +177,7 @@ public interface OfferManager extends EventSubscriber {
     static final String OUTSTANDING_OFFERS = "outstanding_offers";
     @VisibleForTesting
     static final String STATICALLY_BANNED_OFFERS = "statically_banned_offers_size";
-    static final String TASKNAME_LABEL = "task_name";
+    static final String INSTANCE_KEY = "instance_key";
 
     private final HostOffers hostOffers;
     private final AtomicLong offerRaces;
@@ -191,10 +187,7 @@ public interface OfferManager extends EventSubscriber {
     private final DelayExecutor executor;
     private final StatsProvider statsProvider;
     private final MesosTaskFactory taskFactory;
-//    private final Storage storage;
     private final DriverSettings driverSettings;
-//    private final ReservationStore.Mutable reservationStore;
-//    public HashSet<String> reservedTasks;
 
     @Inject
     @VisibleForTesting
@@ -204,10 +197,7 @@ public interface OfferManager extends EventSubscriber {
         StatsProvider statsProvider,
         MesosTaskFactory taskFactory,
         @AsyncExecutor DelayExecutor executor,
-//        Storage storage,
         DriverSettings driverSettings
-//        ReservationStore.Mutable reservationStore,
-//        EventSink eventSink
     ) {
 
       this.driver = requireNonNull(driver);
@@ -220,48 +210,36 @@ public interface OfferManager extends EventSubscriber {
       this.driverSettings = requireNonNull(driverSettings);
     }
 
-    private static String constructTaskNameKey(TaskInfo task, IAssignedTask iAssignedTask) {
-      // TODO: create utils to convert back 'n forth between task_name used inside labels
-      // and other useful objects.
-      return task.getName() + "/" + iAssignedTask.getInstanceId();
-    }
-
     private List<Resource> tagResourceListWithTaskName(
-        List<Resource> resourcesList, String taskNameInstanceId) {
-
-      // TODO: How can I make this method better? I'm embarassed by my code.
-      List<Resource> reservedResourceList = new ArrayList<>();
-      for (Resource resource: resourcesList) {
-        reservedResourceList.add(
-            Resource.newBuilder(resource)
-                .setRole(driverSettings.getFrameworkInfo().getRole())
-                .setReservation(Resource.ReservationInfo.newBuilder()
-                    .setPrincipal(driverSettings.getFrameworkInfo().getPrincipal())
-                    .setLabels(Labels.newBuilder()
-                        .addLabels(
-                            Label.newBuilder()
-                                .setKey(TASKNAME_LABEL)
-                                .setValue(taskNameInstanceId)
-                                .build())
-                        .build()
-                    )
-                ).build());
-      }
-      return reservedResourceList;
+        List<Resource> resourcesList, IInstanceKey instanceKey) {
+      return Lists.transform(resourcesList, input -> input.toBuilder()
+          // Add the reservation information
+          .setRole(driverSettings.getFrameworkInfo().getRole())
+          .setReservation(Resource.ReservationInfo.newBuilder()
+              .setPrincipal(driverSettings.getFrameworkInfo().getPrincipal())
+              .setLabels(Labels.newBuilder()
+                  .addLabels(
+                      Label.newBuilder()
+                          .setKey(INSTANCE_KEY)
+                          .setValue(InstanceKeys.toString(instanceKey))
+                          .build())
+                  .build()
+              )).build());
     }
 
-    private void reserveAndLaunchTask(Offer offer, IAssignedTask iAssignedTask,
+    @VisibleForTesting
+    public void reserveAndLaunchTask(Offer offer, IAssignedTask iAssignedTask,
                                       TaskInfo taskInfo) {
       OfferID offerId = offer.getId();
       LOG.info("Reserved task getting launched is " + taskInfo.getName());
 
-      String taskNameInstanceId = OfferManagerImpl.constructTaskNameKey(taskInfo, iAssignedTask);
-
-      List<Resource> resourcesList = taskInfo.getResourcesList();
       List<Resource> reservedResourceList = tagResourceListWithTaskName(
-          resourcesList, taskNameInstanceId);
+          taskInfo.getResourcesList(),
+          InstanceKeys.from(taskInfo, iAssignedTask)
+      );
       // Rebuild the TaskInfo with tagged resources.
-      TaskInfo newTask = taskInfo.toBuilder().clearResources()
+      TaskInfo newTask = taskInfo.toBuilder()
+          .clearResources()
           .addAllResources(reservedResourceList).build();
       // RESERVE op
       Operation reserve = Offer.Operation.newBuilder()
@@ -276,10 +254,6 @@ public interface OfferManager extends EventSubscriber {
           .setLaunch(Offer.Operation.Launch.newBuilder()
               .addTaskInfos(newTask))
           .build();
-//  Placeholder for AURORA-181? which will add ReservationStore
-//        storage.write(
-//            (Storage.MutateWork.NoResult.Quiet) storeProvider ->
-//              storeProvider.getReservationStore().saveReserervedTasks(taskNameInstanceId));
 
       List<Operation> operations = Arrays.asList(reserve, launch);
       driver.acceptOffers(offerId, operations, getOfferFilter());

@@ -18,8 +18,10 @@ import java.util.Objects;
 import com.google.common.base.Preconditions;
 
 import org.apache.aurora.gen.InstanceKey;
+import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IInstanceKey;
 import org.apache.aurora.scheduler.storage.entities.IJobKey;
+import org.apache.mesos.Protos.TaskInfo;
 
 /**
  * Utility function for {@link IInstanceKey instance keys}.
@@ -40,6 +42,20 @@ public final class InstanceKeys {
     Objects.requireNonNull(job);
     Preconditions.checkArgument(instanceId >= 0);
     return IInstanceKey.build(new InstanceKey(job.newBuilder(), instanceId));
+  }
+
+  /**
+   * Creates an instance key from a job and instance ID.
+   *
+   * @param taskInfo TaskInfo object.
+   * @param iAssignedTask AssignedTask containing instanceId.
+   * @return InstanceKey object.
+   */
+  public static IInstanceKey from(TaskInfo taskInfo, IAssignedTask iAssignedTask) {
+    Objects.requireNonNull(taskInfo);
+    Objects.requireNonNull(iAssignedTask);
+
+    return InstanceKeys.from(JobKeys.parse(taskInfo.getName()), iAssignedTask.getInstanceId());
   }
 
   /**

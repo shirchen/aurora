@@ -25,7 +25,6 @@ import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.common.testing.easymock.EasyMockTest;
 import org.apache.aurora.gen.*;
 import org.apache.aurora.scheduler.HostOffer;
-import org.apache.aurora.scheduler.TierInfo;
 import org.apache.aurora.scheduler.TierManager;
 import org.apache.aurora.scheduler.base.JobKeys;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
@@ -90,19 +89,6 @@ public class TaskAssignerImplTest extends EasyMockTest {
           .setAttributes(ImmutableSet.of(
               new Attribute("host", ImmutableSet.of(MESOS_OFFER.getHostname()))))));
 
-//  private static final HostOffer OFFER_WITH_TASK_RESERVED =
-//      new HostOffer(MESOS_OFFER, IHostAttributes.build(new HostAttributes()
-//          .setHost(MESOS_OFFER.getHostname())
-//          .setAttributes(ImmutableSet.of(
-//              new Attribute("host", ImmutableSet.of(MESOS_OFFER.getHostname()))))));
-//
-//  private static final HostOffer OFFER_WITH_DIFFERENT_TASK_RESERVED =
-//      new HostOffer(MESOS_OFFER, IHostAttributes.build(new HostAttributes()
-//          .setHost(MESOS_OFFER.getHostname())
-//          .setAttributes(ImmutableSet.of(
-//              new Attribute("host", ImmutableSet.of(MESOS_OFFER.getHostname()))))));
-//
-
   private static final ITaskConfig TASK_CONFIG = ITaskConfig.build(
       TaskTestUtil.makeConfig(TaskTestUtil.JOB)
           .newBuilder()
@@ -113,34 +99,20 @@ public class TaskAssignerImplTest extends EasyMockTest {
       .setTaskId("task-id")
       .setAssignedPorts(ImmutableMap.of("http", 80))
       .setTask(TASK_CONFIG.newBuilder()));
-
-
-
-
   private static final IScheduledTask TASK = makeTask("id", JOB);
-
   private static final TaskGroupKey GROUP_KEY = TaskGroupKey.from(TASK.getAssignedTask().getTask());
-//  private static final TaskInfo TASK_INFO = TaskInfo.newBuilder()
-//      .setName("taskName")
-//      .setTaskId(TaskID.newBuilder().setValue(Tasks.id(TASK)))
-//      .setSlaveId(MESOS_OFFER.getSlaveId())
-//      .build();
   private static final Map<String, TaskGroupKey> NO_RESERVATION = ImmutableMap.of();
   private static final UnusedResource UNUSED = new UnusedResource(
       bagFromMesosResources(MESOS_OFFER.getResourcesList()),
       OFFER.getAttributes());
 
-
-  // To be reused for Dynamic Reservation
-
   private static final String TASK_ID = "reserved_id";
   private static final IScheduledTask SCHEDULED_TASK =  makeTask(
       TASK_ID, JobKeys.from("role", "dev", "job"));
 
-  private static final String TASK_NAME = "role/dev/job/2";
-//  private static final IScheduledTask RESERVED_TASK = makeTask(TASK_NAME, JOB);
+  private static final String INSTANCE_KEY = "role/dev/job/2";
   private static final Offer MESOS_OFFER_WITH_RESERVED_RESOURCES = offer(
-      labelResource(mesosRange(PORTS, PORT), TASK_NAME));
+      labelResource(mesosRange(PORTS, PORT), INSTANCE_KEY));
   private static final String RESERVATION_SLAVE_ID = MESOS_OFFER_WITH_RESERVED_RESOURCES
       .getSlaveId().getValue();
   private static final HostOffer OFFER_WITH_RESERVATION = new HostOffer(
@@ -159,8 +131,8 @@ public class TaskAssignerImplTest extends EasyMockTest {
                       .setPrincipal("aurora")
                       .setLabels(Protos.Labels.newBuilder()
                       .addLabels(Protos.Label.newBuilder()
-                          .setKey("task_name")
-                          .setValue(TASK_NAME)
+                          .setKey("instance_key")
+                          .setValue(INSTANCE_KEY)
                           .build()
                       ).build())
               )
@@ -191,7 +163,7 @@ public class TaskAssignerImplTest extends EasyMockTest {
                           .setPrincipal("aurora")
                           .setLabels(Protos.Labels.newBuilder()
                               .addLabels(Protos.Label.newBuilder()
-                                  .setKey("task_name")
+                                  .setKey("instnace_key")
                                   .setValue("random/task/not/to/match")
                                   .build()
                               ).build())
@@ -212,7 +184,6 @@ public class TaskAssignerImplTest extends EasyMockTest {
   private MutableStoreProvider storeProvider;
   private StateManager stateManager;
   private SchedulingFilter filter;
-//  private MesosTaskFactory taskFactory;
   private OfferManager offerManager;
   private TaskAssignerImpl assigner;
   private TierManager tierManager;
@@ -304,18 +275,12 @@ public class TaskAssignerImplTest extends EasyMockTest {
 
   @Test
   public void testAssignPartialNoVetoesReserved() throws Exception {
-
-//    String taskId = "reserved_id";
-//    IScheduledTask scheduledTask =  makeTask(taskId, JobKeys.from("role", "dev", "job"));
-
+    // Launch a task that needs reserved resources which have already been reserved.
     TaskGroupKey groupKey =  TaskGroupKey.from(SCHEDULED_TASK.getAssignedTask().getTask());
-
     expect(offerManager.getOffers(groupKey)).andReturn(ImmutableSet.of(OFFER_WITH_RESERVATION));
-
     expect(tierManager.getTier(SCHEDULED_TASK.getAssignedTask().getTask())).andReturn(RESERVED_TIER);
     expect(filter.filter(RESERVE_UNUSED, resourceRequest)).andReturn(ImmutableSet.of());
 
-    //TODO: look into this, why do we call fetchTask twice
     TaskStore taskStore = createMock(TaskStore.class);
     expect(storeProvider.getTaskStore()).andReturn(taskStore);
     expect(taskStore.fetchTask(TASK_ID)).andReturn(Optional.of(SCHEDULED_TASK));
@@ -563,7 +528,7 @@ public class TaskAssignerImplTest extends EasyMockTest {
     // This offer matches our asks: it's resources have the correct label.
     boolean out = assigner.skipThisOffer(
         resourceRequest,
-        TASK_NAME,
+        INSTANCE_KEY,
         OFFER_WITH_RESERVATION,
         Optional.fromNullable(ASSIGNED_TASK)
     );

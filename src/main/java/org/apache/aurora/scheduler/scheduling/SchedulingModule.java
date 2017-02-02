@@ -95,11 +95,6 @@ public class SchedulingModule extends AbstractModule {
       help = "The maximum number of tasks to pick in a single scheduling attempt.")
   private static final Arg<Integer> MAX_TASKS_PER_SCHEDULE_ATTEMPT = Arg.create(5);
 
-//  @Positive
-//  @CmdLine(name = "max_wait_for_reserved_offer",
-//      help = "The maximum time to wait for an offer to come for a dynamic reservation.")
-//  private static final Arg<Integer> MAX_WAIT_RESERVED_OFFER = Arg.create(1);
-
   @Override
   protected void configure() {
     install(new PrivateModule() {

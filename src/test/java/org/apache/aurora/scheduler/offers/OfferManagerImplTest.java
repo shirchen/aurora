@@ -92,7 +92,7 @@ public class OfferManagerImplTest extends EasyMockTest {
   private static final IScheduledTask TASK = makeTask("id", JOB);
   private static final TaskGroupKey GROUP_KEY = TaskGroupKey.from(TASK.getAssignedTask().getTask());
   private static final TaskInfo TASK_INFO = TaskInfo.newBuilder()
-      .setName("taskName")
+      .setName("role/env/job/2")
       .setTaskId(Protos.TaskID.newBuilder().setValue(Tasks.id(TASK)))
       .setSlaveId(MESOS_OFFER.getSlaveId())
       .addAllResources(MESOS_OFFER.getResourcesList())
@@ -386,8 +386,8 @@ public class OfferManagerImplTest extends EasyMockTest {
                 .setLabels(
                     Protos.Labels.newBuilder().addLabels(
                         Protos.Label.newBuilder()
-                            .setKey("task_name")
-                            .setValue("taskName/2").build()))
+                            .setKey("instance_key")
+                            .setValue("role/env/job/2").build()))
             )
             .build()
     );
@@ -410,11 +410,7 @@ public class OfferManagerImplTest extends EasyMockTest {
 
     expect(taskFactory.createFrom(ASSIGNED_TASK, OFFER_D.getOffer())).andReturn(TASK_INFO);
 
-    driver.acceptOffers(
-        OFFER_D.getOffer().getId(),
-        ops,
-        OFFER_FILTER
-    );
+    driver.acceptOffers(OFFER_D.getOffer().getId(), ops, OFFER_FILTER);
     expectLastCall();
 
     control.replay();
@@ -422,6 +418,47 @@ public class OfferManagerImplTest extends EasyMockTest {
 
     offerManager.launchTask(OFFER_D.getOffer(), ASSIGNED_TASK, true);
     clock.advance(RETURN_DELAY);
+  }
+
+  @Test
+  public void testReserveAndLaunchTask() {
+
+    List<Protos.Resource> resourceList = ImmutableList.of(
+        Protos.Resource.newBuilder(mesosRange(PORTS, PORT))
+            .setRole("*")
+            .setReservation(Protos.Resource.ReservationInfo.newBuilder()
+                .setPrincipal("")
+                .setLabels(
+                    Protos.Labels.newBuilder().addLabels(
+                        Protos.Label.newBuilder()
+                            .setKey("instance_key")
+                            .setValue("role/env/job/2").build()))
+            )
+            .build()
+    );
+    Operation RESERVE_OP = Operation.newBuilder()
+        .setType(Operation.Type.RESERVE)
+        .setReserve(Protos.Offer.Operation.Reserve.newBuilder()
+            .addAllResources(resourceList).build())
+        .build();
+    Operation LAUNCH_FOR_RESERVE_OP = Operation.newBuilder()
+        .setType(Operation.Type.LAUNCH)
+        .setLaunch(
+            Operation.Launch.newBuilder()
+                .addTaskInfos(
+                    TASK_INFO.toBuilder().clearResources()
+                        .addAllResources(resourceList).build()
+                )
+        )
+        .build();
+    List<Operation> ops = ImmutableList.of(RESERVE_OP, LAUNCH_FOR_RESERVE_OP);
+
+    driver.acceptOffers(OFFER_D.getOffer().getId(), ops, OFFER_FILTER);
+    expectLastCall();
+    control.replay();
+
+
+    offerManager.reserveAndLaunchTask(OFFER_D.getOffer(), ASSIGNED_TASK, TASK_INFO);
   }
 
   private static HostOffer setMode(HostOffer offer, MaintenanceMode mode) {

@@ -171,11 +171,11 @@ public interface TaskAssigner {
           String labelValue = label.getValue();
           String taskName = JobKeys.canonicalString(
               resourceRequest.getTask().getJob()) + "/" + instanceId;
-          LOG.info(
+          LOG.debug(
               "Task name extracted from task about to be scheduled is " + taskName +
                   " while label is " + labelValue);
           if (labelValue.equals(taskName)) {
-            LOG.debug("Found reservation for task " + taskName);
+            LOG.info("Found reservation for task " + taskName);
             found = true;
             break;
           }
@@ -256,19 +256,19 @@ public interface TaskAssigner {
         boolean launchWithReserved = false;
         if (tierInfo.isReserved()) {
           // Need to find task to lookup its instanceId.
-          Optional<IAssignedTask> iAssignedTask = findAssignedReservedTask(
+          Optional<IAssignedTask> existingAssignedTask = findAssignedReservedTask(
               tierInfo, taskId, storeProvider);
           // Need to differentiate b/n an Offer that just needs to launch a task versus one that
           // we need to reserve resources for. Is this true?
-          if (skipThisOffer(resourceRequest, taskId, offer, iAssignedTask)) {
+          if (skipThisOffer(resourceRequest, taskId, offer, existingAssignedTask)) {
             // Skipping because we require a dynamic reservation and this offer doesn't match our
             // requirements.
             continue;
           }
           // Launch a reserved task with found resources.
-          if (iAssignedTask.isPresent()) {
+          if (existingAssignedTask.isPresent()) {
             launchWithReserved = hasReservedResourcesInsideOfferForTask(
-                resourceRequest, offer, iAssignedTask.get().getInstanceId());
+                resourceRequest, offer, existingAssignedTask.get().getInstanceId());
           }
         }
 
