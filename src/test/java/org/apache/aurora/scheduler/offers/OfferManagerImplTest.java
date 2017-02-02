@@ -303,30 +303,6 @@ public class OfferManagerImplTest extends EasyMockTest {
     clock.advance(RETURN_DELAY);
   }
 
-//  @Test
-//  public void testAddOfferPosted() {
-////    HostOffer offer = HostOffers.makeHostOffer(HostOffers.LABEL);
-//    HostOffer offer = new HostOffer(
-//        Protos.Offer.newBuilder()
-//            .setId(Protos.OfferID.newBuilder().setValue("offer_id"))
-//            .setFrameworkId(Protos.FrameworkID.newBuilder().setValue("framework_id"))
-//            .setSlaveId(Protos.SlaveID.newBuilder().setValue("slave_id"))
-//            .setHostname("host_name")
-//            .addResources(HostOffers.makeCPUResource(HostOffers.LABEL))
-//            .build(),
-//        IHostAttributes.build(new HostAttributes().setMode(NONE)));
-//
-//    eventSink.post(new PubsubEvent.OfferAdded(offer));
-//    expectLastCall();
-//    driver.declineOffer(offer.getOffer().getId(), OFFER_FILTER);
-//    control.replay();
-//
-//
-//    offerManager.addOffer(offer);
-//    clock.advance(Amount.of(1L, Time.MINUTES));
-//
-//  }
-
   private static HostOffer setMode(HostOffer offer, MaintenanceMode mode) {
     return new HostOffer(
         offer.getOffer(),

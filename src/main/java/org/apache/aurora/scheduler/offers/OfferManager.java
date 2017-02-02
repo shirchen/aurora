@@ -202,10 +202,13 @@ public interface OfferManager extends EventSubscriber {
         removeAndDecline(sameSlave.get().getOffer().getId());
       } else {
         // See if any of the resources were dynamically reserved.
+        // Add helper to HostOffer
+        if (offer.hasReserved())
         List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
         for (Protos.Resource resource : resourceList) {
           Protos.Resource.ReservationInfo resInfo = resource.getReservation();
           if (resInfo.isInitialized()) {
+            // TODO: post for every offer and filter inside reconciler.
             eventSink.post(new PubsubEvent.OfferAdded(offer));
             break;
           }
@@ -383,9 +386,12 @@ public interface OfferManager extends EventSubscriber {
       Operation unreserve = Protos.Offer.Operation.newBuilder()
           .setType(Operation.Type.UNRESERVE)
           .setUnreserve(
-              Protos.Offer.Operation.Unreserve.newBuilder().addAllResources(reservedResourceList).build()).build();
+              Protos.Offer.Operation.Unreserve.newBuilder()
+                  .addAllResources(reservedResourceList)
+                  .build())
+          .build();
 
-      List<Operation> operations = Collections.singletonList(unreserve);
+      List<Operation> operations = ImmutableList.of(unreserve);
       driver.acceptOffers(offerId, operations, getOfferFilter());
     }
 
