@@ -339,5 +339,20 @@ public interface PubsubEvent {
     public String toString() {
       return MoreObjects.toStringHelper(this).add("offer", offer.toString()).toString();
     }
+
+    @Override
+    public boolean equals(Object o) {
+      if (!(o instanceof OfferAdded)) {
+        return false;
+      }
+
+      OfferAdded other = (OfferAdded) o;
+      return Objects.equals(offer, other.offer);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(offer);
+    }
   }
 }

@@ -13,13 +13,19 @@
  */
 package org.apache.aurora.scheduler.base;
 
+import java.util.List;
 import java.util.Objects;
 
 import com.google.common.base.Preconditions;
 
+import com.google.common.base.Splitter;
 import org.apache.aurora.gen.InstanceKey;
+import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IInstanceKey;
 import org.apache.aurora.scheduler.storage.entities.IJobKey;
+import org.apache.mesos.Protos.TaskInfo;
+
+import static com.google.common.base.Preconditions.checkArgument;
 
 /**
  * Utility function for {@link IInstanceKey instance keys}.
@@ -40,6 +46,29 @@ public final class InstanceKeys {
     Objects.requireNonNull(job);
     Preconditions.checkArgument(instanceId >= 0);
     return IInstanceKey.build(new InstanceKey(job.newBuilder(), instanceId));
+  }
+
+  /**
+   * Creates an instance key from a job and instance ID.
+   *
+   * @param taskInfo TaskInfo object.
+   * @param iAssignedTask AssignedTask containing instanceId.
+   * @return InstanceKey object.
+   */
+  public static IInstanceKey from(TaskInfo taskInfo, IAssignedTask iAssignedTask) {
+    Objects.requireNonNull(taskInfo);
+    Objects.requireNonNull(iAssignedTask);
+
+    return InstanceKeys.from(JobKeys.parse(taskInfo.getName()), iAssignedTask.getInstanceId());
+  }
+
+  public static IInstanceKey parse(String string) throws IllegalArgumentException {
+    List<String> components = Splitter.on("/").splitToList(string);
+    checkArgument(components.size() == 4);
+    return from(
+        JobKeys.from(components.get(0), components.get(1), components.get(2)),
+        Integer.parseInt(components.get(3))
+    );
   }
 
   /**

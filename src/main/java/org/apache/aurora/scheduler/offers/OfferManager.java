@@ -201,19 +201,7 @@ public interface OfferManager extends EventSubscriber {
         decline(offer.getOffer().getId());
         removeAndDecline(sameSlave.get().getOffer().getId());
       } else {
-        // See if any of the resources were dynamically reserved.
-        // Add helper to HostOffer
-        if (offer.hasReserved())
-        List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
-        for (Protos.Resource resource : resourceList) {
-          Protos.Resource.ReservationInfo resInfo = resource.getReservation();
-          if (resInfo.isInitialized()) {
-            // TODO: post for every offer and filter inside reconciler.
-            eventSink.post(new PubsubEvent.OfferAdded(offer));
-            break;
-          }
-        }
-
+        eventSink.post(new PubsubEvent.OfferAdded(offer));
         hostOffers.add(offer);
         executor.execute(
             () -> removeAndDecline(offer.getOffer().getId()),

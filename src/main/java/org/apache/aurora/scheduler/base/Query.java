@@ -364,18 +364,6 @@ public final class Query {
     }
 
     /**
-     * A convenience method to scope this builder to all active states minus RUNNING. Used to see
-     * if an offer can be unreserved.
-     *
-     * @return A new Builder scoped to Tasks#ACTIVE_STATES excluding RUNNING.
-     */
-    public Builder activeNotRunning() {
-      EnumSet<ScheduleStatus> statuses = EnumSet.copyOf(Tasks.ACTIVE_STATES);
-      statuses.remove(ScheduleStatus.RUNNING);
-      return byStatus(statuses);
-    }
-
-    /**
      * A convenience method to scope this builder to {@link Tasks#TERMINAL_STATES}.
      *
      * @return A new Builder scoped to Tasks#TERMINAL_STATES.

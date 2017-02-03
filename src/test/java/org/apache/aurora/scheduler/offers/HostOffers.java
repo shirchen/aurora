@@ -28,7 +28,7 @@ public class HostOffers {
       // Utility class.
     }
   public static final Protos.Label LABEL = Protos.Label.newBuilder()
-      .setKey("task_name").setValue("foo/bar/buz/0").build();
+      .setKey("instance_key").setValue("foo/bar/buz/0").build();
 
   public static Protos.Resource makeCPUResource(Protos.Label label) {
       return Protos.Resource.newBuilder()
