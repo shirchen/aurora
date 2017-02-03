@@ -13,17 +13,22 @@
  */
 package org.apache.aurora.scheduler.filter;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
 import com.google.common.base.MoreObjects;
 
+import com.google.common.base.Optional;
 import org.apache.aurora.scheduler.resources.ResourceBag;
+import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IConstraint;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 import org.apache.aurora.scheduler.storage.entities.ITaskConfig;
+import org.apache.mesos.Protos.Resource;
 
 import static org.apache.aurora.scheduler.filter.SchedulingFilter.VetoType.CONSTRAINT_MISMATCH;
+import static org.apache.aurora.scheduler.filter.SchedulingFilter.VetoType.DYNAMIC_RESERVATION;
 import static org.apache.aurora.scheduler.filter.SchedulingFilter.VetoType.INSUFFICIENT_RESOURCES;
 import static org.apache.aurora.scheduler.filter.SchedulingFilter.VetoType.LIMIT_NOT_SATISFIED;
 import static org.apache.aurora.scheduler.filter.SchedulingFilter.VetoType.MAINTENANCE;
@@ -82,7 +87,12 @@ public interface SchedulingFilter {
     /**
      * Unable to satisfy proposed scheduler assignment dedicated host constraint.
      */
-    DEDICATED_CONSTRAINT_MISMATCH("Host is dedicated", VetoGroup.STATIC, (int) Math.pow(10, 6));
+    DEDICATED_CONSTRAINT_MISMATCH("Host is dedicated", VetoGroup.STATIC, (int) Math.pow(10, 6)),
+
+    /**
+     * Previous dynamically reserved resources were not found for this task.
+     */
+    DYNAMIC_RESERVATION("Matching reservation not found", VetoGroup.STATIC, (int) Math.pow(10, 5));
 
     private final String reasonFormat;
     private final VetoGroup group;
@@ -188,6 +198,16 @@ public interface SchedulingFilter {
       return new Veto(MAINTENANCE, maintenanceMode, MAINTENANCE.getScore());
     }
 
+    /**
+     * Creates a veto that represents a lack of suitable for assignment hosts due to cluster
+     * maintenance.
+     *
+     * @return A reservation veto.
+     */
+    public static Veto reservation() {
+      return new Veto(DYNAMIC_RESERVATION, "", DYNAMIC_RESERVATION.getScore());
+    }
+
     public String getReason() {
       return reason;
     }
@@ -248,10 +268,17 @@ public interface SchedulingFilter {
   class UnusedResource {
     private final ResourceBag offer;
     private final IHostAttributes attributes;
+    private final List<Resource> resourceList;
 
-    public UnusedResource(ResourceBag offer, IHostAttributes attributes) {
+    public UnusedResource(ResourceBag offer, IHostAttributes attributes,
+                          List<Resource> resourceList) {
       this.offer = offer;
       this.attributes = attributes;
+      this.resourceList = resourceList;
+    }
+
+    public List<Resource> getResourceList() {
+      return resourceList;
     }
 
     public ResourceBag getResourceBag() {
@@ -279,6 +306,37 @@ public interface SchedulingFilter {
     }
   }
 
+  class SpecificResourceRequest {
+    private final ResourceRequest resourceRequest;
+    private final Optional<Integer> instanceId;
+
+    public SpecificResourceRequest(ResourceRequest resourceRequest, Optional<Integer> instanceId) {
+      this.resourceRequest = resourceRequest;
+      this.instanceId = instanceId;
+    }
+
+    public ResourceRequest getResourceRequest() {
+      return resourceRequest;
+    }
+
+    public Integer getInstanceId() {
+      return instanceId;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+      SpecificResourceRequest that = (SpecificResourceRequest) o;
+      return Objects.equals(resourceRequest, that.resourceRequest) && Objects.equals(instanceId, that.instanceId);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(resourceRequest, instanceId);
+    }
+  }
+
   /**
    * A request for resources in the cluster.
    */
@@ -286,11 +344,15 @@ public interface SchedulingFilter {
     private final ITaskConfig task;
     private final ResourceBag request;
     private final AttributeAggregate jobState;
+    private final Optional<IAssignedTask> iAssignedTaskOptional;
 
-    public ResourceRequest(ITaskConfig task, ResourceBag request, AttributeAggregate jobState) {
+    public ResourceRequest(ITaskConfig task, ResourceBag request, AttributeAggregate jobState,
+                           Optional<IAssignedTask> iAssignedTaskOptional) {
       this.task = task;
       this.request = request;
+
       this.jobState = jobState;
+      this.iAssignedTaskOptional = iAssignedTaskOptional;
     }
 
     public Iterable<IConstraint> getConstraints() {
@@ -307,6 +369,10 @@ public interface SchedulingFilter {
 
     public AttributeAggregate getJobState() {
       return jobState;
+    }
+
+    public Optional<IAssignedTask> getiAssignedTaskOptional() {
+      return iAssignedTaskOptional;
     }
 
     @Override
@@ -335,5 +401,5 @@ public interface SchedulingFilter {
    * @return A set of vetoes indicating reasons the task cannot be scheduled.  If the task may be
    *    scheduled, the set will be empty.
    */
-  Set<Veto> filter(UnusedResource resource, ResourceRequest request);
+  Set<Veto> filter(UnusedResource resource, SpecificResourceRequest request);
 }

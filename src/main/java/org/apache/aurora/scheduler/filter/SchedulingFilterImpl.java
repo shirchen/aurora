@@ -15,6 +15,7 @@ package org.apache.aurora.scheduler.filter;
 
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -26,12 +27,21 @@ import com.google.common.collect.Ordering;
 import org.apache.aurora.common.inject.TimedInterceptor.Timed;
 import org.apache.aurora.gen.MaintenanceMode;
 import org.apache.aurora.gen.TaskConstraint;
+import org.apache.aurora.scheduler.HostOffer;
+import org.apache.aurora.scheduler.base.InstanceKeys;
+import org.apache.aurora.scheduler.base.JobKeys;
 import org.apache.aurora.scheduler.configuration.ConfigurationManager;
 import org.apache.aurora.scheduler.resources.ResourceBag;
 import org.apache.aurora.scheduler.resources.ResourceType;
+import org.apache.aurora.scheduler.state.TaskAssigner;
+import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IAttribute;
 import org.apache.aurora.scheduler.storage.entities.IConstraint;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
+import org.apache.aurora.scheduler.storage.entities.IInstanceKey;
+import org.apache.mesos.Protos;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.aurora.gen.MaintenanceMode.DRAINED;
 import static org.apache.aurora.gen.MaintenanceMode.DRAINING;
@@ -43,6 +53,7 @@ import static org.apache.aurora.scheduler.configuration.ConfigurationManager.DED
  */
 public class SchedulingFilterImpl implements SchedulingFilter {
   private static final Set<MaintenanceMode> VETO_MODES = EnumSet.of(DRAINING, DRAINED);
+  private static final Logger LOG = LoggerFactory.getLogger(SchedulingFilterImpl.class);
 
   @VisibleForTesting
   static int scale(double value, int range) {
@@ -70,6 +81,43 @@ public class SchedulingFilterImpl implements SchedulingFilter {
     required.streamResourceVectors().forEach(
         e -> maybeAddVeto(vetoes, e.getKey(), available.valueOf(e.getKey()), e.getValue()));
     return vetoes.build();
+  }
+
+  @VisibleForTesting
+  private static boolean hasReservedResourcesInsideOfferForTask(
+      SpecificResourceRequest resourceRequest, UnusedResource unusedResource) {
+
+    IInstanceKey requestedInstanceKey = InstanceKeys.from(
+        resourceRequest.getResourceRequest().getTask().getJob(), resourceRequest.getInstanceId());
+    boolean found = false;
+    List<Protos.Resource> resourceList = unusedResource.getResourceList();
+    for (Protos.Resource resource : resourceList) {
+      Protos.Resource.ReservationInfo resInfo = resource.getReservation();
+      Protos.Labels labels = resInfo.getLabels();
+      List<Protos.Label> labelList = labels.getLabelsList();
+      for (Protos.Label label : labelList) {
+        IInstanceKey instanceKey = InstanceKeys.parse(label.getValue());
+        LOG.debug(
+            "Task name extracted from task about to be scheduled is "
+                + InstanceKeys.toString(requestedInstanceKey) +
+                " while label is "
+                + InstanceKeys.toString(instanceKey));
+        if (requestedInstanceKey.equals(instanceKey)) {
+          LOG.info("Found reservation for task " + InstanceKeys.toString(requestedInstanceKey));
+          found = true;
+          break;
+        }
+      }
+    }
+    return found;
+  }
+
+  private static Optional<Veto> getReservationVeto(UnusedResource resource,
+                                                   SpecificResourceRequest request) {
+    if (hasReservedResourcesInsideOfferForTask(request, resource)) {
+      return Optional.of(Veto.reservation());
+    }
+    return Optional.absent();
   }
 
   private static boolean isValueConstraint(IConstraint constraint) {
@@ -117,13 +165,13 @@ public class SchedulingFilterImpl implements SchedulingFilter {
 
   @Timed("scheduling_filter")
   @Override
-  public Set<Veto> filter(UnusedResource resource, ResourceRequest request) {
+  public Set<Veto> filter(UnusedResource resource, SpecificResourceRequest request) {
     // Apply veto filtering rules from higher to lower score making sure we cut over and return
     // early any time a veto from a score group is applied. This helps to more accurately report
     // a veto reason in the NearestFit.
 
     // 1. Dedicated constraint check (highest score).
-    if (!ConfigurationManager.isDedicated(request.getConstraints())
+    if (!ConfigurationManager.isDedicated(request.getResourceRequest().getConstraints())
         && isDedicated(resource.getAttributes())) {
 
       return ImmutableSet.of(Veto.dedicatedHostConstraintMismatch());
@@ -137,15 +185,22 @@ public class SchedulingFilterImpl implements SchedulingFilter {
 
     // 3. Value and limit constraint check.
     Optional<Veto> constraintVeto = getConstraintVeto(
-        request.getConstraints(),
-        request.getJobState(),
+        request.getResourceRequest().getConstraints(),
+        request.getResourceRequest().getJobState(),
         resource.getAttributes().getAttributes());
 
     if (constraintVeto.isPresent()) {
       return constraintVeto.asSet();
     }
 
-    // 4. Resource check (lowest score).
-    return getResourceVetoes(resource.getResourceBag(), request.getResourceBag());
+    // Dynamic reservation veto.
+
+    Optional<Veto> reservationVeto = getReservationVeto(resource, request);
+    if (reservationVeto.isPresent()) {
+      return ImmutableSet.of(Veto.reservation());
+    }
+
+    // Resource check (lowest score).
+    return getResourceVetoes(resource.getResourceBag(), request.getResourceRequest().getResourceBag());
   }
 }

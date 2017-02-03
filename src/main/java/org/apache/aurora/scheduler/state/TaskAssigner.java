@@ -250,26 +250,39 @@ public interface TaskAssigner {
           continue;
         }
 
-        Set<Veto> vetoes = filter.filter(
-            new UnusedResource(offer.getResourceBag(tierInfo), offer.getAttributes()), resourceRequest);
 
         boolean launchWithReserved = false;
+        Set<Veto> vetoes = null;
         if (tierInfo.isReserved()) {
           // Need to find task to lookup its instanceId.
           Optional<IAssignedTask> existingAssignedTask = findAssignedReservedTask(
               tierInfo, taskId, storeProvider);
-          // Need to differentiate b/n an Offer that just needs to launch a task versus one that
-          // we need to reserve resources for. Is this true?
-          if (skipThisOffer(resourceRequest, taskId, offer, existingAssignedTask)) {
-            // Skipping because we require a dynamic reservation and this offer doesn't match our
-            // requirements.
-            continue;
-          }
-          // Launch a reserved task with found resources.
+
           if (existingAssignedTask.isPresent()) {
+          // TODO: mutate resourceRequest with instanceKey
+          vetoes = filter.filter(
+              new UnusedResource(offer.getResourceBag(tierInfo), offer.getAttributes(), offer.getOffer().getResourcesList()),
+              new SchedulingFilter.SpecificResourceRequest(resourceRequest, Optional.of(existingAssignedTask.get().getInstanceId()))
+          );
+
+
+//          // Need to differentiate b/n an Offer that just needs to launch a task versus one that
+//          // we need to reserve resources for. Is this true?
+//          if (skipThisOffer(resourceRequest, taskId, offer, existingAssignedTask)) {
+//            // Skipping because we require a dynamic reservation and this offer doesn't match our
+//            // requirements.
+//            continue;
+//          }
+          // Launch a reserved task with found resources.
             launchWithReserved = hasReservedResourcesInsideOfferForTask(
                 resourceRequest, offer, existingAssignedTask.get().getInstanceId());
           }
+        } else {
+          vetoes = filter.filter(
+              new UnusedResource(
+                  offer.getResourceBag(tierInfo), offer.getAttributes(), offer.getOffer().getResourcesList()),
+              new SchedulingFilter.SpecificResourceRequest(resourceRequest, Optional.absent())
+          );
         }
 
         if (vetoes.isEmpty()) {

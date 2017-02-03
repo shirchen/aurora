@@ -178,7 +178,9 @@ public interface TaskScheduler extends EventSubscriber {
           store,
           new ResourceRequest(
               task,
-              bagFromResources(task.getResources()).add(overhead), aggregate),
+              bagFromResources(task.getResources()).add(overhead), aggregate,
+              // Get IassignedTask in here
+              ),
           TaskGroupKey.from(task),
           assignableTaskMap.keySet(),
           reservations.asMap());
