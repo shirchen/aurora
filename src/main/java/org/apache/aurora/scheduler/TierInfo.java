@@ -29,7 +29,7 @@ public final class TierInfo {
 
   private final boolean preemptible;
   private final boolean revocable;
-  private final boolean reserved;
+  private boolean reserved;
 
   @JsonCreator
   public TierInfo(
@@ -63,8 +63,30 @@ public final class TierInfo {
   }
 
 
+  /**
+   * Checks if this tier intends to run with Mesos revocable resource offers.
+   *
+   * @return {@code true} if this tier requires reserved resource offers, {@code false} otherwise.
+   */
   public boolean isReserved() {
     return reserved;
+  }
+
+  /**
+   * Used by scheduling filter to try and find an offer for an unreserved tier when launching
+   * a task requiring dynamic reservations for the first time.
+   */
+  public TierInfo unReserve() {
+    reserved = false;
+    return this;
+  }
+
+  /**
+   * Flip reserved flag again.
+   */
+  public TierInfo reReserve() {
+    reserved = true;
+    return this;
   }
 
   /**

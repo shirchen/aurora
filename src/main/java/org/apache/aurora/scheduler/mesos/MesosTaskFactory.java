@@ -27,7 +27,9 @@ import com.google.protobuf.ByteString;
 
 import org.apache.aurora.Protobufs;
 import org.apache.aurora.codec.ThriftBinaryCodec;
+import org.apache.aurora.scheduler.TierInfo;
 import org.apache.aurora.scheduler.TierManager;
+import org.apache.aurora.scheduler.base.InstanceKeys;
 import org.apache.aurora.scheduler.base.JobKeys;
 import org.apache.aurora.scheduler.base.SchedulerException;
 import org.apache.aurora.scheduler.base.Tasks;
@@ -40,6 +42,7 @@ import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IDockerContainer;
 import org.apache.aurora.scheduler.storage.entities.IDockerImage;
 import org.apache.aurora.scheduler.storage.entities.IImage;
+import org.apache.aurora.scheduler.storage.entities.IInstanceKey;
 import org.apache.aurora.scheduler.storage.entities.IJobKey;
 import org.apache.aurora.scheduler.storage.entities.IMesosContainer;
 import org.apache.aurora.scheduler.storage.entities.IServerInfo;
@@ -77,7 +80,7 @@ public interface MesosTaskFactory {
    * @return A new task.
    * @throws SchedulerException If the task could not be encoded.
    */
-  TaskInfo createFrom(IAssignedTask task, Offer offer) throws SchedulerException;
+  TaskInfo createFrom(IAssignedTask task, Offer offer, boolean newReserved) throws SchedulerException;
 
   // TODO(wfarner): Move this class to its own file to reduce visibility to package private.
   class MesosTaskFactoryImpl implements MesosTaskFactory {
@@ -98,20 +101,25 @@ public interface MesosTaskFactory {
 
     @VisibleForTesting
     static final String TIER_LABEL = AURORA_LABEL_PREFIX + ".tier";
+    static final String INSTANCE_KEY = "instance_key";
 
     private final ExecutorSettings executorSettings;
     private final TierManager tierManager;
     private final IServerInfo serverInfo;
+    private final DriverSettings driverSettings;
 
     @Inject
     MesosTaskFactoryImpl(
         ExecutorSettings executorSettings,
         TierManager tierManager,
-        IServerInfo serverInfo) {
+        IServerInfo serverInfo,
+        DriverSettings driverSettings
+        ) {
 
       this.executorSettings = requireNonNull(executorSettings);
       this.tierManager = requireNonNull(tierManager);
       this.serverInfo = requireNonNull(serverInfo);
+      this.driverSettings = driverSettings;
     }
 
     @VisibleForTesting
@@ -151,7 +159,7 @@ public interface MesosTaskFactory {
     }
 
     @Override
-    public TaskInfo createFrom(IAssignedTask task, Offer offer) throws SchedulerException {
+    public TaskInfo createFrom(IAssignedTask task, Offer offer, boolean newReserved) throws SchedulerException {
       requireNonNull(task);
       requireNonNull(offer);
 
@@ -167,11 +175,17 @@ public interface MesosTaskFactory {
       AcceptedOffer acceptedOffer;
       // TODO(wfarner): Re-evaluate if/why we need to continue handling unset assignedPorts field.
       try {
+        TierInfo tierInfo = tierManager.getTier(task.getTask());
+        if (newReserved) {
+          tierInfo.unReserve();
+        }
         acceptedOffer = AcceptedOffer.create(
             offer,
             task,
             executorOverhead,
-            tierManager.getTier(task.getTask()));
+            tierInfo
+            );
+        tierInfo.reReserve();
       } catch (ResourceManager.InsufficientResourcesException e) {
         throw new SchedulerException(e);
       }
@@ -185,7 +199,13 @@ public interface MesosTaskFactory {
           .setName(JobKeys.canonicalString(Tasks.getJob(task)))
           .setTaskId(TaskID.newBuilder().setValue(task.getTaskId()))
           .setSlaveId(offer.getSlaveId())
-          .addAllResources(resources);
+          .addAllResources(
+              tagResourceListWithTaskName(
+                  resources,
+                  InstanceKeys.from(config.getJob(), task.getInstanceId()),
+                  tierManager.getTier(config)
+              )
+          );
 
       configureTaskLabels(config, taskBuilder);
 
@@ -334,12 +354,41 @@ public interface MesosTaskFactory {
       builder.setCommand(builder.getCommand().toBuilder().addAllUris(mesosFetcherUris));
 
       Iterable<Resource> executorResources = acceptedOffer.getExecutorResources();
+      builder.clearResources().addAllResources(
+          tagResourceListWithTaskName(
+              executorResources,
+              InstanceKeys.from(task.getTask().getJob(), task.getInstanceId()),
+              tierManager.getTier(task.getTask())
+          )
+      );
       LOG.debug(
           "Setting executor resources to {}",
-          Iterables.transform(executorResources, Protobufs::toString));
-      builder.clearResources().addAllResources(executorResources);
+          Iterables.transform(builder.getResourcesList(), Protobufs::toString));
+
       return builder;
     }
+
+    private Iterable<Resource> tagResourceListWithTaskName(
+        Iterable<Resource> resourcesList, IInstanceKey instanceKey, TierInfo tierInfo) {
+      if (tierInfo.isReserved()) {
+        return Iterables.transform(resourcesList, input -> input.toBuilder()
+            // Add the reservation information
+            .setRole(driverSettings.getFrameworkInfo().getRole())
+            .setReservation(Resource.ReservationInfo.newBuilder()
+                .setPrincipal(driverSettings.getFrameworkInfo().getPrincipal())
+                .setLabels(Labels.newBuilder()
+                    .addLabels(
+                        Label.newBuilder()
+                            .setKey(INSTANCE_KEY)
+                            .setValue(InstanceKeys.toString(instanceKey))
+                            .build())
+                    .build()
+                )).build());
+      } else {
+        return resourcesList;
+      }
+    }
+
 
     private void configureTaskLabels(ITaskConfig config, TaskInfo.Builder taskBuilder) {
       Labels.Builder labelsBuilder = Labels.newBuilder();

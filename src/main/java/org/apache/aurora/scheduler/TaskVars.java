@@ -69,13 +69,15 @@ class TaskVars extends AbstractIdleService implements EventSubscriber {
   );
 
   @VisibleForTesting
-  static final Map<VetoType, String> VETO_TYPE_TO_COUNTERS = ImmutableMap.of(
-      VetoType.CONSTRAINT_MISMATCH, "scheduling_veto_constraint_mismatch",
-      VetoType.DEDICATED_CONSTRAINT_MISMATCH, "scheduling_veto_dedicated_constraint_mismatch",
-      VetoType.INSUFFICIENT_RESOURCES, "scheduling_veto_insufficient_resources",
-      VetoType.LIMIT_NOT_SATISFIED, "scheduling_veto_limit_not_satisfied",
-      VetoType.MAINTENANCE, "scheduling_veto_maintenance"
-  );
+  static final Map<VetoType, String> VETO_TYPE_TO_COUNTERS = ImmutableMap
+      .<VetoType, String>builder()
+      .put(VetoType.CONSTRAINT_MISMATCH, "scheduling_veto_constraint_mismatch")
+      .put(VetoType.DEDICATED_CONSTRAINT_MISMATCH, "scheduling_veto_dedicated_constraint_mismatch")
+      .put(VetoType.INSUFFICIENT_RESOURCES, "scheduling_veto_insufficient_resources")
+      .put(VetoType.MAINTENANCE, "scheduling_veto_maintenance")
+      .put(VetoType.DYNAMIC_RESERVATION, "scheduling_veto_dynamic_reservation")
+      .put(VetoType.LIMIT_NOT_SATISFIED, "scheduling_veto_limit_not_satisfied")
+      .build();
 
   private final LoadingCache<String, Counter> counters;
   private final LoadingCache<String, Counter> untrackedCounters;

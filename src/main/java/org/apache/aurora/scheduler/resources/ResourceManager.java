@@ -53,6 +53,8 @@ public final class ResourceManager {
   public static final Predicate<Resource> REVOCABLE =
       r -> !fromResource(r).isMesosRevocable() || r.hasRevocable();
 
+  public static final Predicate<Resource> RESERVED = r -> r.hasReservation();
+
   /**
    * TODO(maxim): reduce visibility by redirecting callers to #getNonRevocableOfferResources().
    */
@@ -96,6 +98,19 @@ public final class ResourceManager {
    * @param offer Offer to get resources from.
    * @return Mesos-revocable offer resources.
    */
+  public static Iterable<Resource> getReservedOfferResources(Offer offer) {
+    return Iterables.filter(
+        offer.getResourcesList(),
+        Predicates.and(SUPPORTED_RESOURCE, RESERVED));
+  }
+
+
+  /**
+   * Gets Mesos-revocable offer resources.
+   *
+   * @param offer Offer to get resources from.
+   * @return Mesos-revocable offer resources.
+   */
   public static Iterable<Resource> getRevocableOfferResources(Offer offer) {
     return Iterables.filter(
         offer.getResourcesList(),
@@ -122,13 +137,19 @@ public final class ResourceManager {
    * @return Offer resources filtered by {@code tierInfo}.
    */
   public static Iterable<Resource> getOfferResources(Offer offer, TierInfo tierInfo) {
-    return tierInfo.isRevocable()
-        ? getRevocableOfferResources(offer)
-        : getNonRevocableOfferResources(offer);
+    if (tierInfo.isRevocable()) {
+      return getRevocableOfferResources(offer);
+//    } else if (tierInfo.isPrereserved()) {
+//      return getNonRevocableOfferResources(offer);
+    } else if (tierInfo.isReserved()) {
+      return getReservedOfferResources(offer);
+    } else {
+      return getNonRevocableOfferResources(offer);
+    }
   }
 
   /**
-   * Gets offer resoruces filtered by the {@code tierInfo} and {@code type}.
+   * Gets offer resources filtered by the {@code tierInfo} and {@code type}.
    *
    * @param offer Offer to get resources from.
    * @param tierInfo Tier info.

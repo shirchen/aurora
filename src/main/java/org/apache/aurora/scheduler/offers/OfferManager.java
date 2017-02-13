@@ -13,13 +13,18 @@
  */
 package org.apache.aurora.scheduler.offers;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import javax.inject.Inject;
 
@@ -50,8 +55,10 @@ import org.apache.aurora.scheduler.base.TaskGroupKey;
 import org.apache.aurora.scheduler.events.PubsubEvent.DriverDisconnected;
 import org.apache.aurora.scheduler.events.PubsubEvent.EventSubscriber;
 import org.apache.aurora.scheduler.mesos.Driver;
-import org.apache.aurora.scheduler.mesos.DriverSettings;
 import org.apache.aurora.scheduler.mesos.MesosTaskFactory;
+import org.apache.aurora.scheduler.resources.ResourceBag;
+import org.apache.aurora.scheduler.resources.ResourceManager;
+import org.apache.aurora.scheduler.resources.ResourceType;
 import org.apache.aurora.scheduler.storage.entities.IAssignedTask;
 import org.apache.aurora.scheduler.storage.entities.IHostAttributes;
 import org.apache.aurora.scheduler.storage.entities.IInstanceKey;
@@ -69,11 +76,13 @@ import org.slf4j.LoggerFactory;
 
 import static java.util.Objects.requireNonNull;
 
+import static java.util.stream.Collectors.toList;
 import static org.apache.aurora.gen.MaintenanceMode.DRAINED;
 import static org.apache.aurora.gen.MaintenanceMode.DRAINING;
 import static org.apache.aurora.gen.MaintenanceMode.NONE;
 import static org.apache.aurora.gen.MaintenanceMode.SCHEDULED;
 import static org.apache.aurora.scheduler.events.PubsubEvent.HostAttributesChanged;
+import static org.apache.aurora.scheduler.resources.ResourceManager.getOfferResources;
 
 
 /**
@@ -109,10 +118,10 @@ public interface OfferManager extends EventSubscriber {
    * Launches the task matched against the offer.
    *
    * @param offer Matched offer.
-   * @param iAssignedTask Matched task info.
+   * @param taskInfo Matched task info.
    * @throws LaunchException If there was an error launching the task.
    */
-  void launchTask(Protos.Offer offer, IAssignedTask iAssignedTask, boolean reserve)
+  void launchTask(Protos.Offer offer, TaskInfo taskInfo, boolean reserve)
       throws LaunchException;
 
   /**
@@ -177,7 +186,6 @@ public interface OfferManager extends EventSubscriber {
     static final String OUTSTANDING_OFFERS = "outstanding_offers";
     @VisibleForTesting
     static final String STATICALLY_BANNED_OFFERS = "statically_banned_offers_size";
-    static final String INSTANCE_KEY = "instance_key";
 
     private final HostOffers hostOffers;
     private final AtomicLong offerRaces;
@@ -186,8 +194,6 @@ public interface OfferManager extends EventSubscriber {
     private final OfferSettings offerSettings;
     private final DelayExecutor executor;
     private final StatsProvider statsProvider;
-    private final MesosTaskFactory taskFactory;
-    private final DriverSettings driverSettings;
 
     @Inject
     @VisibleForTesting
@@ -195,9 +201,7 @@ public interface OfferManager extends EventSubscriber {
         Driver driver,
         OfferSettings offerSettings,
         StatsProvider statsProvider,
-        MesosTaskFactory taskFactory,
-        @AsyncExecutor DelayExecutor executor,
-        DriverSettings driverSettings
+        @AsyncExecutor DelayExecutor executor
     ) {
 
       this.driver = requireNonNull(driver);
@@ -205,58 +209,7 @@ public interface OfferManager extends EventSubscriber {
       this.executor = requireNonNull(executor);
       this.offerRaces = statsProvider.makeCounter(OFFER_ACCEPT_RACES);
       this.statsProvider = requireNonNull(statsProvider);
-      this.taskFactory = requireNonNull(taskFactory);
       this.hostOffers = new HostOffers(statsProvider);
-      this.driverSettings = requireNonNull(driverSettings);
-    }
-
-    private List<Resource> tagResourceListWithTaskName(
-        List<Resource> resourcesList, IInstanceKey instanceKey) {
-      return Lists.transform(resourcesList, input -> input.toBuilder()
-          // Add the reservation information
-          .setRole(driverSettings.getFrameworkInfo().getRole())
-          .setReservation(Resource.ReservationInfo.newBuilder()
-              .setPrincipal(driverSettings.getFrameworkInfo().getPrincipal())
-              .setLabels(Labels.newBuilder()
-                  .addLabels(
-                      Label.newBuilder()
-                          .setKey(INSTANCE_KEY)
-                          .setValue(InstanceKeys.toString(instanceKey))
-                          .build())
-                  .build()
-              )).build());
-    }
-
-    @VisibleForTesting
-    public void reserveAndLaunchTask(Offer offer, IAssignedTask iAssignedTask,
-                                      TaskInfo taskInfo) {
-      OfferID offerId = offer.getId();
-      LOG.info("Reserved task getting launched is " + taskInfo.getName());
-
-      List<Resource> reservedResourceList = tagResourceListWithTaskName(
-          taskInfo.getResourcesList(),
-          InstanceKeys.from(taskInfo, iAssignedTask)
-      );
-      // Rebuild the TaskInfo with tagged resources.
-      TaskInfo newTask = taskInfo.toBuilder()
-          .clearResources()
-          .addAllResources(reservedResourceList).build();
-      // RESERVE op
-      Operation reserve = Offer.Operation.newBuilder()
-          .setType(Operation.Type.RESERVE)
-          .setReserve(
-              Operation.Reserve.newBuilder().addAllResources(reservedResourceList)
-          )
-          .build();
-      // LAUNCH op
-      Operation launch = Offer.Operation.newBuilder()
-          .setType(Offer.Operation.Type.LAUNCH)
-          .setLaunch(Offer.Operation.Launch.newBuilder()
-              .addTaskInfos(newTask))
-          .build();
-
-      List<Operation> operations = Arrays.asList(reserve, launch);
-      driver.acceptOffers(offerId, operations, getOfferFilter());
     }
 
     @Override
@@ -448,7 +401,7 @@ public interface OfferManager extends EventSubscriber {
 
     @Timed("offer_manager_launch_task")
     @Override
-    public void launchTask(Offer offer, IAssignedTask iAssignedTask, boolean reserve)
+    public void launchTask(Offer offer, TaskInfo taskInfo, boolean reserve)
         throws LaunchException {
       // Guard against an offer being removed after we grabbed it from the iterator.
       // If that happens, the offer will not exist in hostOffers, and we can immediately
@@ -456,18 +409,35 @@ public interface OfferManager extends EventSubscriber {
       // Removing while iterating counts on the use of a weakly-consistent iterator being used,
       // which is a feature of ConcurrentSkipListSet.
       OfferID offerId = offer.getId();
-      TaskInfo taskInfo = taskFactory.createFrom(iAssignedTask, offer);
       if (hostOffers.remove(offerId)) {
         try {
+          Operation launch = Operation.newBuilder()
+              .setType(Operation.Type.LAUNCH)
+              .setLaunch(Operation.Launch.newBuilder()
+                  .addTaskInfos(taskInfo))
+              .build();
+          List<Operation> operations = Lists.newArrayList();
+          operations.add(launch);
           if (reserve) {
-            // If we need to reserve resources then do this. Only happens the first time we launch
-            // a task requiring reserved resources.
-            reserveAndLaunchTask(offer, iAssignedTask, taskInfo);
-          } else {
-            Operation launch = Operation.newBuilder().setType(Operation.Type.LAUNCH).setLaunch(
-                Operation.Launch.newBuilder().addTaskInfos(taskInfo)).build();
-            driver.acceptOffers(offerId, ImmutableList.of(launch), getOfferFilter());
+            LOG.debug("Reserved task getting launched is " + taskInfo.getName());
+            Operation reserveOp = Offer.Operation.newBuilder()
+                .setType(Operation.Type.RESERVE)
+                .setReserve(
+                    Operation.Reserve.newBuilder()
+                        .addAllResources(
+                            // TODO: flatten the resource list
+                            Stream.concat(
+                                taskInfo.getResourcesList().stream(),
+                                taskInfo.getExecutor().getResourcesList().stream())
+                                .collect(Collectors.toList()))
+//                            taskInfo.getResourcesList())
+//                        .addAllResources(taskInfo.getExecutor().getResourcesList())
+
+                ).build();
+            operations.add(0, reserveOp);
           }
+          LOG.debug("Ops" + operations.toString());
+        driver.acceptOffers(offerId, operations, getOfferFilter());
         } catch (IllegalStateException e) {
           // TODO(William Farner): Catch only the checked exception produced by Driver
           // once it changes from throwing IllegalStateException when the driver is not yet

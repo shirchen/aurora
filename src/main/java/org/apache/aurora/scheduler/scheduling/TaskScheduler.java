@@ -34,6 +34,8 @@ import com.google.common.eventbus.Subscribe;
 
 import org.apache.aurora.common.inject.TimedInterceptor.Timed;
 import org.apache.aurora.common.stats.Stats;
+import org.apache.aurora.scheduler.TierInfo;
+import org.apache.aurora.scheduler.TierManager;
 import org.apache.aurora.scheduler.base.Query;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
 import org.apache.aurora.scheduler.configuration.executor.ExecutorSettings;
@@ -99,6 +101,7 @@ public interface TaskScheduler extends EventSubscriber {
     private final Preemptor preemptor;
     private final ExecutorSettings executorSettings;
     private final BiCache<String, TaskGroupKey> reservations;
+    private final TierManager tierManager;
 
     private final AtomicLong attemptsFired = Stats.exportLong("schedule_attempts_fired");
     private final AtomicLong attemptsFailed = Stats.exportLong("schedule_attempts_failed");
@@ -109,12 +112,15 @@ public interface TaskScheduler extends EventSubscriber {
         TaskAssigner assigner,
         Preemptor preemptor,
         ExecutorSettings executorSettings,
-        BiCache<String, TaskGroupKey> reservations) {
+        BiCache<String, TaskGroupKey> reservations,
+        TierManager tierManager
+    ) {
 
       this.assigner = requireNonNull(assigner);
       this.preemptor = requireNonNull(preemptor);
       this.executorSettings = requireNonNull(executorSettings);
       this.reservations = requireNonNull(reservations);
+      this.tierManager = requireNonNull(tierManager);
     }
 
     @Timed ("task_schedule_attempt")
@@ -178,23 +184,28 @@ public interface TaskScheduler extends EventSubscriber {
           store,
           new ResourceRequest(
               task,
-              bagFromResources(task.getResources()).add(overhead), aggregate,
-              // Get IassignedTask in here
+              bagFromResources(task.getResources()).add(overhead), aggregate
               ),
           TaskGroupKey.from(task),
-          assignableTaskMap.keySet(),
+          assignableTaskMap,
           reservations.asMap());
 
       attemptsFired.addAndGet(assignableTaskMap.size());
       Set<String> failedToLaunch = Sets.difference(assignableTaskMap.keySet(), launched);
 
-      failedToLaunch.forEach(taskId -> {
-        // Task could not be scheduled.
-        // TODO(maxim): Now that preemption slots are searched asynchronously, consider
-        // retrying a launch attempt within the current scheduling round IFF a reservation is
-        // available.
-        maybePreemptFor(assignableTaskMap.get(taskId), aggregate, store);
-      });
+      for (String taskId : failedToLaunch) {
+        IAssignedTask iAssignedTask = assignableTaskMap.get(taskId);
+        TierInfo tierInfo =  tierManager.getTier(iAssignedTask.getTask());
+        if (!tierInfo.isReserved()) {
+          // Task could not be scheduled.
+          // TODO(maxim): Now that preemption slots are searched asynchronously, consider
+          // retrying a launch attempt within the current scheduling round IFF a reservation is
+          // available.
+
+          maybePreemptFor(assignableTaskMap.get(taskId), aggregate, store);
+        }
+      }
+
       attemptsNoMatch.addAndGet(failedToLaunch.size());
 
       // Return all successfully launched tasks as well as those weren't tried (not in PENDING).

@@ -268,16 +268,22 @@ public interface SchedulingFilter {
   class UnusedResource {
     private final ResourceBag offer;
     private final IHostAttributes attributes;
-    private final List<Resource> resourceList;
+    private final Optional<List<Resource>> resourceList;
 
     public UnusedResource(ResourceBag offer, IHostAttributes attributes,
                           List<Resource> resourceList) {
       this.offer = offer;
       this.attributes = attributes;
-      this.resourceList = resourceList;
+      this.resourceList = Optional.of(resourceList);
     }
 
-    public List<Resource> getResourceList() {
+    public UnusedResource(ResourceBag offer, IHostAttributes attributes) {
+      this.offer = offer;
+      this.attributes = attributes;
+      this.resourceList = Optional.absent();
+    }
+
+    public Optional<List<Resource>> getResourceList() {
       return resourceList;
     }
 
@@ -297,20 +303,21 @@ public interface SchedulingFilter {
 
       UnusedResource other = (UnusedResource) o;
       return Objects.equals(offer, other.offer)
-          && Objects.equals(attributes, other.attributes);
+          && Objects.equals(attributes, other.attributes)
+          && Objects.equals(resourceList, other.resourceList);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(offer, attributes);
+      return Objects.hash(offer, attributes, resourceList);
     }
   }
 
   class SpecificResourceRequest {
     private final ResourceRequest resourceRequest;
-    private final Optional<Integer> instanceId;
+    private final Integer instanceId;
 
-    public SpecificResourceRequest(ResourceRequest resourceRequest, Optional<Integer> instanceId) {
+    public SpecificResourceRequest(ResourceRequest resourceRequest, Integer instanceId) {
       this.resourceRequest = resourceRequest;
       this.instanceId = instanceId;
     }
@@ -344,15 +351,12 @@ public interface SchedulingFilter {
     private final ITaskConfig task;
     private final ResourceBag request;
     private final AttributeAggregate jobState;
-    private final Optional<IAssignedTask> iAssignedTaskOptional;
 
-    public ResourceRequest(ITaskConfig task, ResourceBag request, AttributeAggregate jobState,
-                           Optional<IAssignedTask> iAssignedTaskOptional) {
+    public ResourceRequest(ITaskConfig task, ResourceBag request, AttributeAggregate jobState) {
       this.task = task;
       this.request = request;
 
       this.jobState = jobState;
-      this.iAssignedTaskOptional = iAssignedTaskOptional;
     }
 
     public Iterable<IConstraint> getConstraints() {
@@ -369,10 +373,6 @@ public interface SchedulingFilter {
 
     public AttributeAggregate getJobState() {
       return jobState;
-    }
-
-    public Optional<IAssignedTask> getiAssignedTaskOptional() {
-      return iAssignedTaskOptional;
     }
 
     @Override
@@ -401,5 +401,7 @@ public interface SchedulingFilter {
    * @return A set of vetoes indicating reasons the task cannot be scheduled.  If the task may be
    *    scheduled, the set will be empty.
    */
-  Set<Veto> filter(UnusedResource resource, SpecificResourceRequest request);
+  Set<Veto> filter(UnusedResource resource, ResourceRequest request);
+
+  Set<Veto> filterForReserved(UnusedResource resource, SpecificResourceRequest request);
 }

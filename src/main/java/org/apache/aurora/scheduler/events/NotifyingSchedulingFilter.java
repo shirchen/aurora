@@ -63,4 +63,14 @@ class NotifyingSchedulingFilter implements SchedulingFilter {
 
     return vetoes;
   }
+
+  @Override
+  public Set<Veto> filterForReserved(UnusedResource resource, SpecificResourceRequest request) {
+    Set<Veto> vetoes = delegate.filterForReserved(resource, request);
+    if (!vetoes.isEmpty()) {
+      eventSink.post(new Vetoed(TaskGroupKey.from(request.getResourceRequest().getTask()), vetoes));
+    }
+
+    return vetoes;
+  }
 }

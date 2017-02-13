@@ -14,33 +14,37 @@
 package org.apache.aurora.scheduler.state;
 
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import javax.inject.Inject;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
+import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 
-import com.google.common.collect.Maps;
+
 import org.apache.aurora.common.inject.TimedInterceptor.Timed;
 import org.apache.aurora.common.quantity.Time;
 import org.apache.aurora.common.stats.StatsProvider;
+import org.apache.aurora.common.util.Clock;
+import org.apache.aurora.gen.ScheduleStatus;
 import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.TierInfo;
 import org.apache.aurora.scheduler.TierManager;
-import org.apache.aurora.scheduler.base.JobKeys;
+import org.apache.aurora.scheduler.base.Query;
 import org.apache.aurora.scheduler.base.TaskGroupKey;
 import org.apache.aurora.scheduler.filter.SchedulingFilter;
 import org.apache.aurora.scheduler.filter.SchedulingFilter.ResourceRequest;
 import org.apache.aurora.scheduler.filter.SchedulingFilter.UnusedResource;
 import org.apache.aurora.scheduler.filter.SchedulingFilter.Veto;
 import org.apache.aurora.scheduler.filter.SchedulingFilter.VetoGroup;
+import org.apache.aurora.scheduler.mesos.MesosTaskFactory;
 import org.apache.aurora.scheduler.offers.OfferManager;
 import org.apache.aurora.scheduler.resources.ResourceManager;
 import org.apache.aurora.scheduler.resources.ResourceType;
@@ -68,7 +72,7 @@ public interface TaskAssigner {
    * @param storeProvider Storage provider.
    * @param resourceRequest The request for resources being scheduled.
    * @param groupKey Task group key.
-   * @param taskIds Task IDs to assign.
+   * @param assignableTaskMap Task IDs to IAssignedTask mapping.
    * @param slaveReservations Slave reservations.
    * @return Successfully assigned task IDs.
    */
@@ -76,7 +80,7 @@ public interface TaskAssigner {
       MutableStoreProvider storeProvider,
       ResourceRequest resourceRequest,
       TaskGroupKey groupKey,
-      Iterable<String> taskIds,
+      Map<String, IAssignedTask> assignableTaskMap,
       Map<String, TaskGroupKey> slaveReservations);
 
   class TaskAssignerImpl implements TaskAssigner {
@@ -92,12 +96,12 @@ public interface TaskAssigner {
 
     private final AtomicLong launchFailures;
     private final AtomicLong evaluatedOffers;
-
+    private final MesosTaskFactory taskFactory;
     private final StateManager stateManager;
     private final SchedulingFilter filter;
     private final OfferManager offerManager;
     private final TierManager tierManager;
-    private final Map<String, Integer> taskIdToStartTime = Maps.newHashMap();
+    private final Clock clock;
 
     @Inject
     public TaskAssignerImpl(
@@ -105,15 +109,18 @@ public interface TaskAssigner {
         SchedulingFilter filter,
         OfferManager offerManager,
         TierManager tierManager,
-        StatsProvider statsProvider) {
+        MesosTaskFactory taskFactory,
+        StatsProvider statsProvider,
+        Clock clock) {
 
       this.stateManager = requireNonNull(stateManager);
       this.filter = requireNonNull(filter);
       this.offerManager = requireNonNull(offerManager);
       this.tierManager = requireNonNull(tierManager);
-
+      this.taskFactory = taskFactory;
       this.launchFailures = statsProvider.makeCounter(ASSIGNER_LAUNCH_FAILURES);
       this.evaluatedOffers = statsProvider.makeCounter(ASSIGNER_EVALUATED_OFFERS);
+      this.clock = clock;
     }
 
     @VisibleForTesting
@@ -146,79 +153,19 @@ public interface TaskAssigner {
     }
 
     @VisibleForTesting
-    boolean waitedLongEnough(String taskId) {
-      boolean enoughWaiting = false;
-      Integer startedToWaitAt = taskIdToStartTime.get(taskId);
+    boolean waitedLongEnough(String taskId, MutableStoreProvider storeProvider) {
+      // We want to find the last PENDING event and see how long we have been waiting for an offer
+      // to come back.
+      Iterable<IScheduledTask> scheduledTasks = FluentIterable.from(
+          storeProvider
+              .getTaskStore()
+              .fetchTasks(Query.taskScoped(taskId).byStatus(ScheduleStatus.PENDING)));
 
-      long timeSeconds = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis());
-      Integer timeNow =  (int)timeSeconds;
-      if (timeNow > startedToWaitAt + offerManager.getReservedOfferWait().as(Time.SECONDS)) {
-        enoughWaiting = true;
-      }
-      return enoughWaiting;
-    }
-
-    @VisibleForTesting
-    boolean hasReservedResourcesInsideOfferForTask(
-        ResourceRequest resourceRequest, HostOffer offer, int instanceId) {
-      boolean found = false;
-      List<Protos.Resource> resourceList = offer.getOffer().getResourcesList();
-      for (Protos.Resource resource : resourceList) {
-        Protos.Resource.ReservationInfo resInfo = resource.getReservation();
-        Protos.Labels labels = resInfo.getLabels();
-        List<Protos.Label> labelList = labels.getLabelsList();
-        for (Protos.Label label : labelList) {
-          String labelValue = label.getValue();
-          String taskName = JobKeys.canonicalString(
-              resourceRequest.getTask().getJob()) + "/" + instanceId;
-          LOG.debug(
-              "Task name extracted from task about to be scheduled is " + taskName +
-                  " while label is " + labelValue);
-          if (labelValue.equals(taskName)) {
-            LOG.info("Found reservation for task " + taskName);
-            found = true;
-            break;
-          }
-        }
-      }
-      return found;
-    }
-
-    @VisibleForTesting
-    void startTiming(String taskId) {
-      long timeMillis = System.currentTimeMillis();
-      long timeSeconds = TimeUnit.MILLISECONDS.toSeconds(timeMillis);
-      this.taskIdToStartTime.putIfAbsent(taskId, (int) timeSeconds);
-    }
-
-    private Optional<IAssignedTask> findAssignedReservedTask(TierInfo tierInfo, String taskId,
-                                                             MutableStoreProvider storeProvider) {
-      IAssignedTask assignedTask = null;
-      if (tierInfo.isReserved()) {
-        Optional<IScheduledTask> scheduledTask = storeProvider.getTaskStore().fetchTask(taskId);
-        if (scheduledTask.isPresent()) {
-          assignedTask = scheduledTask.get().getAssignedTask();
-        }
-      }
-      return Optional.fromNullable(assignedTask);
-    }
-
-    @VisibleForTesting
-    boolean skipThisOffer(ResourceRequest resourceRequest, String taskId, HostOffer offer,
-                          Optional<IAssignedTask> iAssignedTask) {
-      boolean skip = false;
-      if (iAssignedTask.isPresent()) {
-        startTiming(taskId);
-        boolean found = hasReservedResourcesInsideOfferForTask(
-            resourceRequest, offer, iAssignedTask.get().getInstanceId());
-        if (!found && !waitedLongEnough(taskId)) {
-          // We did not find our offer nor waited long enough so continue looking for it.
-          skip = true;
-        }
-      }
-      // If skip is still false then we did not find our reserved resources or did not wait long
-      // enough.
-      return skip;
+      long timestamp = Iterables.getLast(
+          Iterables.getLast(scheduledTasks).getTaskEvents()).getTimestamp();
+      LOG.debug("Waited " + (clock.nowMillis() - timestamp) + " before launching " + taskId);
+      return (clock.nowMillis() >
+          timestamp + offerManager.getReservedOfferWait().as(Time.MILLISECONDS));
     }
 
     @Timed("assigner_maybe_assign")
@@ -227,8 +174,10 @@ public interface TaskAssigner {
         MutableStoreProvider storeProvider,
         ResourceRequest resourceRequest,
         TaskGroupKey groupKey,
-        Iterable<String> taskIds,
+        Map<String, IAssignedTask> assignableTaskMap,
         Map<String, TaskGroupKey> slaveReservations) {
+
+      Iterable<String> taskIds = assignableTaskMap.keySet();
 
       if (Iterables.isEmpty(taskIds)) {
         return ImmutableSet.of();
@@ -249,66 +198,73 @@ public interface TaskAssigner {
           // This slave is reserved for a different task group -> skip.
           continue;
         }
-
-
-        boolean launchWithReserved = false;
-        Set<Veto> vetoes = null;
+        boolean launchAnyway = false;
+        boolean newReserved = false;
+        Set<Veto> vetoes = filter.filter(
+            new UnusedResource(
+                offer.getResourceBag(tierInfo), offer.getAttributes()),
+            resourceRequest
+        );
+        LOG.info("Vetoes before we switch" + vetoes);
         if (tierInfo.isReserved()) {
-          // Need to find task to lookup its instanceId.
-          Optional<IAssignedTask> existingAssignedTask = findAssignedReservedTask(
-              tierInfo, taskId, storeProvider);
-
-          if (existingAssignedTask.isPresent()) {
-          // TODO: mutate resourceRequest with instanceKey
-          vetoes = filter.filter(
-              new UnusedResource(offer.getResourceBag(tierInfo), offer.getAttributes(), offer.getOffer().getResourcesList()),
-              new SchedulingFilter.SpecificResourceRequest(resourceRequest, Optional.of(existingAssignedTask.get().getInstanceId()))
-          );
-
-
-//          // Need to differentiate b/n an Offer that just needs to launch a task versus one that
-//          // we need to reserve resources for. Is this true?
-//          if (skipThisOffer(resourceRequest, taskId, offer, existingAssignedTask)) {
-//            // Skipping because we require a dynamic reservation and this offer doesn't match our
-//            // requirements.
-//            continue;
-//          }
-          // Launch a reserved task with found resources.
-            launchWithReserved = hasReservedResourcesInsideOfferForTask(
-                resourceRequest, offer, existingAssignedTask.get().getInstanceId());
+          // IF we waited long enough, this may be a new task or one for which matching offer can
+          // not be found.
+          if (waitedLongEnough(taskId, storeProvider)) {
+            java.util.Optional<Veto> returned = vetoes.stream().filter(veto -> {
+              if (veto.getVetoType().equals(SchedulingFilter.VetoType.INSUFFICIENT_RESOURCES)) {
+                return false;
+              } else {
+                return true;
+              }
+            }).findAny();
+            // Then we see which ones of the vetoes are resource related and whether we can clear
+            // them by switching tiers.
+            if (!returned.isPresent() && tierInfo.isReserved()) {
+              vetoes = filter.filter(new UnusedResource(offer.getResourceBag(tierInfo.unReserve()), offer.getAttributes()), resourceRequest);
+              LOG.info("Vetoes after we switch tiers " + vetoes);
+              tierInfo.reReserve();
+              // So now we know that the offer is big enough and we should be able to launch with it.
+            }
+            launchAnyway = true;
+            newReserved = true;
           }
-        } else {
-          vetoes = filter.filter(
-              new UnusedResource(
-                  offer.getResourceBag(tierInfo), offer.getAttributes(), offer.getOffer().getResourcesList()),
-              new SchedulingFilter.SpecificResourceRequest(resourceRequest, Optional.absent())
-          );
+          //TODO: see if we still need to do the logic below if we have logic above ^.
+          if (vetoes.isEmpty()) {
+            IAssignedTask iAssignedTask = assignableTaskMap.get(taskId);
+            // Right now we are not getting a veto for a reserved task not finding the correct offer.
+            // Now if we launch for the first time we need to ignore that one.
+            vetoes = filter.filterForReserved(
+                new UnusedResource(
+                    offer.getResourceBag(tierInfo),
+                    offer.getAttributes(),
+                    offer.getOffer().getResourcesList()),
+                new SchedulingFilter.SpecificResourceRequest(
+                    resourceRequest, iAssignedTask.getInstanceId()));
+            if (vetoes.equals(Stream.of(Veto.reservation()).collect(Collectors.toSet()))) {
+              // iff we get one one reservation veto then we check when last PENDING event happened.
+              // If task has been in PENDING waiting for offer to come back, then we launch task on
+              // first non-vetoed offer. Otherwise, we keep on waiting.
+              launchAnyway = waitedLongEnough(taskId, storeProvider);
+              // if waitedLongEnough and we got vetoes on resources then we need to stop
+
+            }
+          }
         }
 
-        if (vetoes.isEmpty()) {
+        if (vetoes.isEmpty() || launchAnyway) {
           IAssignedTask assignedTask = assign(
               storeProvider,
               offer.getOffer(),
               taskId);
 
           resourceRequest.getJobState().updateAttributeAggregate(offer.getAttributes());
-
+          Protos.TaskInfo taskInfo = taskFactory.createFrom(assignedTask, offer.getOffer(), newReserved);
           try {
-            if (tierInfo.isReserved()) {
-              LOG.info("tierInfo is RESERVED: " + tierInfo.toString());
-              this.taskIdToStartTime.remove(taskId);
-              if (launchWithReserved) {
-                // Just need to perform launch operation.
-                LOG.info("Found the offer and launching task");
-                offerManager.launchTask(offer.getOffer(), assignedTask, false);
-              } else {
-                LOG.info("Either did not find offer or launch for the first time");
-                // Need to perform reserve + launch operation.
-                offerManager.launchTask(offer.getOffer(), assignedTask, true);
-              }
+            if (tierInfo.isReserved() && launchAnyway) {
+              LOG.info("Either did not find matching offer or launching task for the first time");
+              offerManager.launchTask(offer.getOffer(), taskInfo, true);
             } else {
-              // Task does not need reserved resources.
-              offerManager.launchTask(offer.getOffer(), assignedTask, false);
+              offerManager.launchTask(offer.getOffer(), taskInfo, false);
             }
 
             assignmentResult.add(taskId);
@@ -336,7 +292,8 @@ public interface TaskAssigner {
             break;
           }
         } else {
-          if (Veto.identifyGroup(vetoes) == VetoGroup.STATIC) {
+          if (Veto.identifyGroup(vetoes) == VetoGroup.STATIC
+              && ! vetoes.equals(Stream.of(Veto.reservation()).collect(Collectors.toSet()))) {
             // Never attempt to match this offer/groupKey pair again.
             offerManager.banOffer(offer.getOffer().getId(), groupKey);
           }
