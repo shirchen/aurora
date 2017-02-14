@@ -425,14 +425,10 @@ public interface OfferManager extends EventSubscriber {
                 .setReserve(
                     Operation.Reserve.newBuilder()
                         .addAllResources(
-                            // TODO: flatten the resource list
                             Stream.concat(
                                 taskInfo.getResourcesList().stream(),
                                 taskInfo.getExecutor().getResourcesList().stream())
                                 .collect(Collectors.toList()))
-//                            taskInfo.getResourcesList())
-//                        .addAllResources(taskInfo.getExecutor().getResourcesList())
-
                 ).build();
             operations.add(0, reserveOp);
           }

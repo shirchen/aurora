@@ -205,7 +205,7 @@ public interface TaskAssigner {
                 offer.getResourceBag(tierInfo), offer.getAttributes()),
             resourceRequest
         );
-        LOG.info("Vetoes before we switch" + vetoes);
+        LOG.info("Vetoes before we switch" + vetoes + "for tier" + tierInfo);
         if (tierInfo.isReserved()) {
           // IF we waited long enough, this may be a new task or one for which matching offer can
           // not be found.
@@ -219,16 +219,17 @@ public interface TaskAssigner {
             }).findAny();
             // Then we see which ones of the vetoes are resource related and whether we can clear
             // them by switching tiers.
-            if (!returned.isPresent() && tierInfo.isReserved()) {
-              vetoes = filter.filter(new UnusedResource(offer.getResourceBag(tierInfo.unReserve()), offer.getAttributes()), resourceRequest);
+            if (!returned.isPresent()) {
+              vetoes = filter.filter(
+                  new UnusedResource(offer.getResourceBag(tierInfo.unReserve()),
+                      offer.getAttributes()), resourceRequest);
               LOG.info("Vetoes after we switch tiers " + vetoes);
               tierInfo.reReserve();
-              // So now we know that the offer is big enough and we should be able to launch with it.
+              // So now we know whether the offer is big enough and we should be able to launch with it.
             }
             launchAnyway = true;
             newReserved = true;
           }
-          //TODO: see if we still need to do the logic below if we have logic above ^.
           if (vetoes.isEmpty()) {
             IAssignedTask iAssignedTask = assignableTaskMap.get(taskId);
             // Right now we are not getting a veto for a reserved task not finding the correct offer.
@@ -240,7 +241,7 @@ public interface TaskAssigner {
                     offer.getOffer().getResourcesList()),
                 new SchedulingFilter.SpecificResourceRequest(
                     resourceRequest, iAssignedTask.getInstanceId()));
-            if (vetoes.equals(Stream.of(Veto.reservation()).collect(Collectors.toSet()))) {
+            if (vetoes.equals(ImmutableSet.of(Veto.reservation()))) {
               // iff we get one one reservation veto then we check when last PENDING event happened.
               // If task has been in PENDING waiting for offer to come back, then we launch task on
               // first non-vetoed offer. Otherwise, we keep on waiting.

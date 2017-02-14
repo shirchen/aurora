@@ -101,8 +101,8 @@ public interface TierManager {
       checkArgument(
           !taskConfig.isSetTier() || tierConfig.tiers.containsKey(taskConfig.getTier()),
           "Invalid tier '%s' in TaskConfig.", taskConfig.getTier());
-
-      return tierConfig.tiers.get(taskConfig.getTier());
+      TierInfo tierInfo = tierConfig.tiers.get(taskConfig.getTier());
+      return tierInfo.copyOf();
     }
 
     @Override

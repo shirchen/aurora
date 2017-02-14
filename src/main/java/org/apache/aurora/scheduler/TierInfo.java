@@ -26,7 +26,6 @@ import org.codehaus.jackson.annotate.JsonProperty;
  * Defines common task tier traits and behaviors.
  */
 public final class TierInfo {
-
   private final boolean preemptible;
   private final boolean revocable;
   private boolean reserved;
@@ -105,6 +104,10 @@ public final class TierInfo {
   @Override
   public int hashCode() {
     return Objects.hash(preemptible, revocable, reserved);
+  }
+
+  public TierInfo copyOf() {
+    return new TierInfo(preemptible, revocable, reserved);
   }
 
   @Override
