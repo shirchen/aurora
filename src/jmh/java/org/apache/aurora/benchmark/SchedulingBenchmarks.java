@@ -41,6 +41,7 @@ import org.apache.aurora.common.util.testing.FakeClock;
 import org.apache.aurora.gen.ServerInfo;
 import org.apache.aurora.scheduler.HostOffer;
 import org.apache.aurora.scheduler.TaskIdGenerator;
+import org.apache.aurora.scheduler.TierManager;
 import org.apache.aurora.scheduler.TierModule;
 import org.apache.aurora.scheduler.async.AsyncModule;
 import org.apache.aurora.scheduler.async.DelayExecutor;
@@ -169,6 +170,7 @@ public class SchedulingBenchmarks {
               bind(StatsProvider.class).toInstance(new FakeStatsProvider());
               bind(EventSink.class).toInstance(eventBus::post);
               bind(IServerInfo.class).toInstance(IServerInfo.build(new ServerInfo("jmh", "")));
+              bind(TierManager.class).to(TierManager.TierManagerImpl.class);
             }
           }
       );

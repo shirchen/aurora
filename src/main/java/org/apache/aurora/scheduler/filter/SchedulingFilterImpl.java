@@ -156,17 +156,6 @@ public class SchedulingFilterImpl implements SchedulingFilter {
         new ConstraintMatcher.NameFilter(DEDICATED_ATTRIBUTE));
   }
 
-  @Timed("reservation_scheduling_filter")
-  @Override
-  public Set<Veto> filterForReserved(UnusedResource resource, SpecificResourceRequest request) {
-    Optional<Veto> reservationVeto = getReservationVeto(resource, request);
-    if (reservationVeto.isPresent()) {
-      return ImmutableSet.of(Veto.reservation());
-    }
-    return ImmutableSet.of();
-
-  }
-
   @Timed("scheduling_filter")
   @Override
   public Set<Veto> filter(UnusedResource resource, ResourceRequest request) {
@@ -195,7 +184,18 @@ public class SchedulingFilterImpl implements SchedulingFilter {
     if (constraintVeto.isPresent()) {
       return constraintVeto.asSet();
     }
-    // Resource check (lowest score).
+    // 4. Resource check (lowest score).
     return getResourceVetoes(resource.getResourceBag(), request.getResourceBag());
+  }
+
+  @Timed("reservation_scheduling_filter")
+  @Override
+  public Set<Veto> filterForReserved(UnusedResource resource, SpecificResourceRequest request) {
+    Optional<Veto> reservationVeto = getReservationVeto(resource, request);
+    if (reservationVeto.isPresent()) {
+      return ImmutableSet.of(Veto.reservation());
+    }
+    return ImmutableSet.of();
+
   }
 }

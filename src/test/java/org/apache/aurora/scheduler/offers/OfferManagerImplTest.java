@@ -146,7 +146,7 @@ public class OfferManagerImplTest extends EasyMockTest {
             .setName("test framework")
             .build());
     offerManager = new OfferManagerImpl(
-        driver, offerSettings, statsProvider, taskFactory, executorMock, driverSettings);
+        driver, offerSettings, statsProvider, executorMock);
   }
 
   @Test
@@ -322,7 +322,7 @@ public class OfferManagerImplTest extends EasyMockTest {
 
   @Test(expected = OfferManager.LaunchException.class)
   public void testAcceptOffersDriverThrows() throws OfferManager.LaunchException {
-    expect(taskFactory.createFrom(ASSIGNED_TASK, OFFER_A.getOffer())).andReturn(TASK_INFO);
+    expect(taskFactory.createFrom(ASSIGNED_TASK, OFFER_A.getOffer(), false)).andReturn(TASK_INFO);
     driver.acceptOffers(OFFER_A_ID, OPERATIONS, OFFER_FILTER);
     expectLastCall().andThrow(new IllegalStateException());
 
@@ -339,7 +339,7 @@ public class OfferManagerImplTest extends EasyMockTest {
 
   @Test
   public void testLaunchTaskOfferRaceThrows() {
-    expect(taskFactory.createFrom(ASSIGNED_TASK, OFFER_A.getOffer())).andReturn(TASK_INFO);
+    expect(taskFactory.createFrom(ASSIGNED_TASK, OFFER_A.getOffer(), false)).andReturn(TASK_INFO);
     expectLastCall();
     control.replay();
     try {
@@ -408,7 +408,7 @@ public class OfferManagerImplTest extends EasyMockTest {
       .build();
     List<Operation> ops = ImmutableList.of(RESERVE_OP, LAUNCH_FOR_RESERVE_OP);
 
-    expect(taskFactory.createFrom(ASSIGNED_TASK, OFFER_D.getOffer())).andReturn(TASK_INFO);
+    expect(taskFactory.createFrom(ASSIGNED_TASK, OFFER_D.getOffer(), false)).andReturn(TASK_INFO);
 
     driver.acceptOffers(OFFER_D.getOffer().getId(), ops, OFFER_FILTER);
     expectLastCall();
