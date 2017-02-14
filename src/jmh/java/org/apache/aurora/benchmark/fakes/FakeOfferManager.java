@@ -36,7 +36,7 @@ public class FakeOfferManager implements OfferManager {
   }
 
   @Override
-  public void launchTask(Protos.Offer offer, IAssignedTask iAssignedTask, boolean reserved) throws LaunchException {
+  public void launchTask(Protos.Offer offer, Protos.TaskInfo taskInfo, boolean reserve) throws LaunchException {
     // no-op
   }
 
